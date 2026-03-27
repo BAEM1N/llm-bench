@@ -71,7 +71,14 @@ backends:
     enabled: true
     base_url: "http://localhost:8080"
     binary: "llama-server"
-    n_gpu_layers: 99
+    n_gpu_layers: 99      # -1 = CPU only, 99 = all layers to GPU
+    flash_attn: true      # --flash-attn: prefill 속도 향상 (Metal 지원)
+    batch_size: 512       # --batch-size: prefill 배치 크기
+    ubatch_size: 512      # --ubatch-size: 마이크로 배치 크기
+    threads: null         # --threads: null = llama.cpp 자동 결정
+    threads_batch: null   # --threads-batch: null = llama.cpp 자동 결정
+    mlock: false          # --mlock: 모델을 RAM에 고정 (swap 방지)
+    extra_args: []        # 추가 raw 플래그 (e.g. ["--numa", "numactl"])
   mlx:
     enabled: true
 
@@ -80,6 +87,7 @@ models:
     architecture: "dense"
     total_params: "9B"
     active_params: "9B"
+    context_window: 262144
     quantizations:
       - name: "Q4_K_M"
         gguf_path: "~/.lmstudio/models/unsloth/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q4_K_M.gguf"
@@ -96,6 +104,7 @@ models:
     architecture: "dense"
     total_params: "27B"
     active_params: "27B"
+    context_window: 262144
     quantizations:
       - name: "Q4_K_M"
         gguf_path: "~/.lmstudio/models/unsloth/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q4_K_M.gguf"
@@ -112,6 +121,7 @@ models:
     architecture: "moe"
     total_params: "35B"
     active_params: "3B"
+    context_window: 262144
     quantizations:
       - name: "Q4_K_M"
         gguf_path: "~/.lmstudio/models/unsloth/Qwen3.5-35B-A3B-GGUF/Qwen3.5-35B-A3B-Q4_K_M.gguf"
@@ -122,12 +132,13 @@ models:
         gguf_path: "~/.lmstudio/models/unsloth/Qwen3.5-35B-A3B-GGUF/Qwen3.5-35B-A3B-Q8_0.gguf"
         lmstudio_model: "qwen/qwen3.5-35b-a3b"
         ollama_model: "qwen3.5:35b-a3b-q8_0"
-        mlx_model: ""  # MLX 35B는 4bit만 제공
+        mlx_model: "~/.cache/mlx/Qwen3.5-35B-A3B-8bit"
 
   - id: "qwen3.5-122b-a10b"
     architecture: "moe"
     total_params: "122B"
     active_params: "10B"
+    context_window: 262144
     quantizations:
       - name: "Q4_K_M"
         gguf_path: "~/.lmstudio/models/unsloth/Qwen3.5-122B-A10B-GGUF/Qwen3.5-122B-A10B-Q4_K_M-00001-of-00003.gguf"

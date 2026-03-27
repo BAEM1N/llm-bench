@@ -36,6 +36,13 @@ def make_backend(name: str, cfg: dict):
             base_url=cfg["base_url"],
             binary=cfg.get("binary", "llama-server"),
             n_gpu_layers=cfg.get("n_gpu_layers", 99),
+            flash_attn=cfg.get("flash_attn", True),
+            batch_size=cfg.get("batch_size", 512),
+            ubatch_size=cfg.get("ubatch_size", 512),
+            threads=cfg.get("threads"),
+            threads_batch=cfg.get("threads_batch"),
+            mlock=cfg.get("mlock", False),
+            extra_args=cfg.get("extra_args", []),
         )
     if name == "mlx":
         return MLXBackend()

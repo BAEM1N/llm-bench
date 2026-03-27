@@ -3,6 +3,7 @@ import time
 import subprocess
 import httpx
 from pathlib import Path
+from typing import Optional
 
 from .base import BaseBackend, GenerateResult
 
@@ -17,10 +18,24 @@ class LlamaCppBackend(BaseBackend):
         base_url: str = "http://localhost:8080",
         binary: str = "llama-server",
         n_gpu_layers: int = 99,
+        flash_attn: bool = True,
+        batch_size: Optional[int] = 512,
+        ubatch_size: Optional[int] = 512,
+        threads: Optional[int] = None,
+        threads_batch: Optional[int] = None,
+        mlock: bool = False,
+        extra_args: Optional[list] = None,
     ):
         self.base_url = base_url
         self.binary = binary
         self.n_gpu_layers = n_gpu_layers
+        self.flash_attn = flash_attn
+        self.batch_size = batch_size
+        self.ubatch_size = ubatch_size
+        self.threads = threads
+        self.threads_batch = threads_batch
+        self.mlock = mlock
+        self.extra_args = extra_args or []
         self._model_id: str = ""
         self._context_window: int = 262144
         self._proc: subprocess.Popen | None = None
@@ -53,6 +68,20 @@ class LlamaCppBackend(BaseBackend):
             "--no-mmap",
             "--log-disable",
         ]
+        if self.flash_attn:
+            cmd.append("--flash-attn")
+        if self.batch_size is not None:
+            cmd += ["--batch-size", str(self.batch_size)]
+        if self.ubatch_size is not None:
+            cmd += ["--ubatch-size", str(self.ubatch_size)]
+        if self.threads is not None:
+            cmd += ["--threads", str(self.threads)]
+        if self.threads_batch is not None:
+            cmd += ["--threads-batch", str(self.threads_batch)]
+        if self.mlock:
+            cmd.append("--mlock")
+        if self.extra_args:
+            cmd.extend(self.extra_args)
 
         self._proc = subprocess.Popen(
             cmd,

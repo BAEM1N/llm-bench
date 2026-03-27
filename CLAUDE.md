@@ -65,15 +65,15 @@ llm-bench/
 
 ## 모델 정보
 
-| 모델 | 아키텍처 | Total Params | Active Params |
-|------|----------|-------------|---------------|
-| Qwen3.5-9B | Dense | 9B | 9B |
-| Qwen3.5-27B | Dense | 27B | 27B |
-| Qwen3.5-35B-A3B | MoE | 35B | ~3B |
-| Qwen3.5-122B-A10B | MoE | 122B | ~10B |
+| 모델 | 아키텍처 | Total Params | Active Params | Context Window |
+|------|----------|-------------|---------------|----------------|
+| Qwen3.5-9B | Dense | 9B | 9B | 262,144 (256K) |
+| Qwen3.5-27B | Dense | 27B | 27B | 262,144 (256K) |
+| Qwen3.5-35B-A3B | MoE | 35B | ~3B | 262,144 (256K) |
+| Qwen3.5-122B-A10B | MoE | 122B | ~10B | 262,144 (256K) |
 
 - GGUF 소스: **unsloth** (Dynamic 2.0 양자화, lmstudio-community 대비 품질 우수)
-- MLX 소스: **mlx-community** (4bit 기준, 35B는 8bit 미제공)
+- MLX 소스: **mlx-community** (4bit/8bit, 전 모델 제공)
 
 ## 모델 경로 (Mac 기준)
 
@@ -150,7 +150,7 @@ uv run python -m src.runner --output results/my_run.csv
 - shard 2: 47GB, shard 3: 25GB
 
 ### MLX 35B-A3B 8bit
-- mlx-community에서 미제공. `mlx_model: ""` 로 설정 → 벤치마크 자동 스킵
+- mlx-community에서 제공됨 (`mlx-community/Qwen3.5-35B-A3B-8bit`). 이전 판단 오류.
 
 ### LM Studio 모델 ID 형식
 - `qwen3.5-9b@q4_k_m` (소문자, @로 양자화 구분)
