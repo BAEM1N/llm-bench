@@ -54,6 +54,7 @@ def make_backend(name: str, cfg: dict):
             gpu_memory_utilization=cfg.get("gpu_memory_utilization", 0.90),
             max_model_len=cfg.get("max_model_len"),
             quantization=cfg.get("quantization"),
+            cpu_offload_gb=cfg.get("cpu_offload_gb", 0.0),
             extra_args=cfg.get("extra_args", []),
         )
     raise ValueError(f"Unknown backend: {name}")

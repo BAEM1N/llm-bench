@@ -141,6 +141,10 @@ backends:
     #   DGX Spark (128GB unified)       : 65536  (64K)
     #   Ryzen AI MAX 395+ (128GB unified): 65536 (64K) — Strix Halo, 유니파이드 메모리 (Apple Silicon과 동일 구조)
     max_model_len: 32768
+    # VRAM 초과 모델 CPU 오프로드 (GB). 0 = 오프로드 없음.
+    # 3090 2-WAY (48GB) + 122B Q4_K_M (~65GB): 20 으로 설정
+    # DGX Spark / Ryzen AI MAX: 0 (전부 GPU에 올라감)
+    cpu_offload_gb: 0
     extra_args: []
 
 models:

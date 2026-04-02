@@ -32,7 +32,8 @@ class VLLMBackend(BaseBackend):
         tensor_parallel_size: int = 1,
         gpu_memory_utilization: float = 0.90,
         max_model_len: Optional[int] = None,
-        quantization: Optional[str] = None,  # "awq", "gptq", None
+        quantization: Optional[str] = None,  # "awq", "gptq", "gguf", None
+        cpu_offload_gb: float = 0.0,         # VRAM 부족 시 CPU RAM 오프로드 (GB)
         extra_args: Optional[list] = None,
     ):
         self.base_url = base_url
@@ -41,6 +42,7 @@ class VLLMBackend(BaseBackend):
         self.gpu_memory_utilization = gpu_memory_utilization
         self.max_model_len = max_model_len
         self.quantization = quantization
+        self.cpu_offload_gb = cpu_offload_gb
         self.extra_args = extra_args or []
         self._model_id: str = ""
         self._context_window: int = 262144
@@ -79,6 +81,10 @@ class VLLMBackend(BaseBackend):
             cmd += ["--load-format", "gguf"]
         elif self.quantization:
             cmd += ["--quantization", self.quantization]
+        if self.cpu_offload_gb > 0:
+            # VRAM 초과 모델을 CPU RAM으로 오프로드.
+            # 3090 2-WAY (48GB) + 122B Q4 (~65GB): --cpu-offload-gb 20 권장.
+            cmd += ["--cpu-offload-gb", str(self.cpu_offload_gb)]
         if self.extra_args:
             cmd.extend(self.extra_args)
 
