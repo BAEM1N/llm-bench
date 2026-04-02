@@ -147,6 +147,18 @@ backends:
     cpu_offload_gb: 0
     extra_args: []
 
+  # ── SGLang (NVIDIA — vLLM 대비 throughput 비교용) ─────────────────────────
+  # 설치: pip install sglang[all]
+  # vLLM과 동일 모델(GPTQ-Int4) 사용. sglang_model 미설정 시 vllm_model 자동 사용.
+  sglang:
+    enabled: false        # NVIDIA 환경에서만 true로 변경
+    base_url: "http://localhost:30000"
+    tensor_parallel_size: 2
+    gpu_memory_utilization: 0.90
+    max_model_len: 32768
+    cpu_offload_gb: 0
+    extra_args: []
+
 models:
   - id: "qwen3.5-9b"
     architecture: "dense"

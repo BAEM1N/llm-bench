@@ -373,7 +373,7 @@ async def _closed_loop_run(
                                gen_cfg["top_p"], gen_cfg["repeat_penalty"], timeout)
                 for p in prompts
             ]
-        elif backend_name == "vllm":
+        elif backend_name in ("vllm", "sglang"):
             coros = [
                 _stream_vllm(client, base_url, model_id, p, max_tokens,
                              gen_cfg["temperature"], gen_cfg["top_p"],
@@ -425,7 +425,7 @@ async def _open_loop_run(
                 coro = _stream_ollama(client, base_url, model_id, prompt, max_tokens,
                                       context_window, gen_cfg["temperature"],
                                       gen_cfg["top_p"], gen_cfg["repeat_penalty"], timeout)
-            elif backend_name == "vllm":
+            elif backend_name in ("vllm", "sglang"):
                 coro = _stream_vllm(client, base_url, model_id, prompt, max_tokens,
                                     gen_cfg["temperature"], gen_cfg["top_p"],
                                     gen_cfg["repeat_penalty"], timeout)
@@ -585,7 +585,7 @@ def _append_csv(row: dict, path: Path, fields: list) -> None:
 
 # ─── HTTP backend filter ─────────────────────────────────────────────────────
 
-_HTTP_BACKENDS = {"ollama", "llamacpp", "vllm"}
+_HTTP_BACKENDS = {"ollama", "llamacpp", "vllm", "sglang"}
 _ALL_BACKENDS  = _HTTP_BACKENDS | {"mlx"}
 
 
@@ -594,6 +594,8 @@ def _get_model_ref(backend_name: str, quant_cfg: dict) -> str:
         return quant_cfg.get("ollama_model", "")
     if backend_name == "vllm":
         return quant_cfg.get("vllm_model") or quant_cfg.get("gguf_path", "")
+    if backend_name == "sglang":
+        return quant_cfg.get("sglang_model") or quant_cfg.get("vllm_model", "")
     if backend_name == "mlx":
         return quant_cfg.get("mlx_model", "")
     return quant_cfg.get("gguf_path", "")  # llamacpp
@@ -604,6 +606,7 @@ def _default_base_url(backend_name: str) -> str:
         "llamacpp": "http://localhost:8080",
         "ollama":   "http://localhost:11434",
         "vllm":     "http://localhost:8000",
+        "sglang":   "http://localhost:30000",
         "mlx":      "",
     }.get(backend_name, "")
 

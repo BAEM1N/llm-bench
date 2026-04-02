@@ -17,6 +17,7 @@ from .backends.lmstudio import LMStudioBackend
 from .backends.llamacpp import LlamaCppBackend
 from .backends.mlx_backend import MLXBackend
 from .backends.vllm_backend import VLLMBackend
+from .backends.sglang_backend import SGLangBackend
 
 console = Console()
 
@@ -50,6 +51,16 @@ def make_backend(name: str, cfg: dict):
         return VLLMBackend(
             base_url=cfg.get("base_url", "http://localhost:8000"),
             binary=cfg.get("binary", "vllm"),
+            tensor_parallel_size=cfg.get("tensor_parallel_size", 1),
+            gpu_memory_utilization=cfg.get("gpu_memory_utilization", 0.90),
+            max_model_len=cfg.get("max_model_len"),
+            quantization=cfg.get("quantization"),
+            cpu_offload_gb=cfg.get("cpu_offload_gb", 0.0),
+            extra_args=cfg.get("extra_args", []),
+        )
+    if name == "sglang":
+        return SGLangBackend(
+            base_url=cfg.get("base_url", "http://localhost:30000"),
             tensor_parallel_size=cfg.get("tensor_parallel_size", 1),
             gpu_memory_utilization=cfg.get("gpu_memory_utilization", 0.90),
             max_model_len=cfg.get("max_model_len"),
@@ -294,6 +305,11 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
                     if not model_ref:
                         console.print(f"[yellow]Skip vLLM: {model_cfg['id']} {quant_cfg['name']} (vllm_model 미설정)[/yellow]")
                         continue
+                elif backend_name == "sglang":
+                    model_ref = quant_cfg.get("sglang_model") or quant_cfg.get("vllm_model", "")
+                    if not model_ref:
+                        console.print(f"[yellow]Skip SGLang: {model_cfg['id']} {quant_cfg['name']} (sglang_model 미설정)[/yellow]")
+                        continue
                 else:
                     model_ref = quant_cfg["gguf_path"]
 
@@ -302,10 +318,13 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
                 # 전 백엔드 동일 full context (공정 비교)
                 load_ctx = gen_cfg["context_window"]
 
-                # vLLM: quantization type을 quant_cfg에서 per-model 재설정
-                # (Q4_K_M → AWQ, Q8_0 → BF16/None, GGUF 직접 로드 시 "gguf")
+                # vLLM / SGLang: quantization type을 quant_cfg에서 per-model 재설정
                 if backend_name == "vllm" and "vllm_quantization" in quant_cfg:
                     backend.quantization = quant_cfg.get("vllm_quantization")
+                if backend_name == "sglang":
+                    q = quant_cfg.get("sglang_quantization") or quant_cfg.get("vllm_quantization")
+                    if q is not None:
+                        backend.quantization = q
 
                 # 모델 로드
                 try:
