@@ -141,6 +141,10 @@ def run_track(
             prefill_tps = (input_tokens / (result.ttft_ms / 1000)) if result.ttft_ms > 0 else 0.0
             prefill_tps_source = "ttft_estimate"
 
+        # hit_rate = 생성 완주율 (output_tokens / max_tokens). 품질 지표가 아님.
+        # hit_rate > 0.9: numbered format이 EOS 억제에 효과적으로 작동.
+        # hit_rate < 0.5: 모델이 일찍 종료 → 결과 신뢰도 주의.
+        # 반복/루프/저품질 장문도 hit_rate 높게 나올 수 있음.
         hit_rate = round(result.output_tokens / max_tokens, 4) if track_type == "generation" else -1.0
 
         total_power_w = power_info["total_power_w"]

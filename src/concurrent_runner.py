@@ -407,8 +407,11 @@ async def _open_loop_run(
 ) -> list:
     """rate req/s로 duration_s 동안 요청을 주입, 전부 완료 후 반환.
 
-    실제 도착 간격 = 1/rate 초 (고정, Poisson 미사용).
-    큐 쌓임 / p95 latency 붕괴 지점 탐색에 사용.
+    도착 모델: 고정 간격(deterministic) — 1/rate 초마다 1개 발사.
+    실제 서비스 트래픽은 Poisson 과정(지수 분포 도착 간격)이므로
+    이 측정값은 "지속 처리량 상한 추정"으로 해석해야 한다.
+    Burst 내성 / Poisson 하에서의 p99 latency는 과소 추정될 수 있다.
+    해석 범위: "이 rate를 초과하면 SLA가 깨지기 시작한다"는 knee point 탐색.
     """
     interval = 1.0 / rate
     tasks = []

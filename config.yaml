@@ -6,6 +6,9 @@ generation:
   top_p: 1.0
   repeat_penalty: 1.0
   context_window: 262144  # 256K — Qwen3.5 max native context
+  # 컨텍스트 정책: 전 백엔드 동일 full ctx로 통일 (공정 비교 우선).
+  # 실사용(4K–32K)과 다를 수 있음. KV 메모리 점유가 gen_tps에 영향을 준다.
+  # 하드웨어별 최적 ctx를 원하면 Mode A + hardware.id 분리 실험으로 비교.
 
 benchmark:
   warmup_runs: 1
