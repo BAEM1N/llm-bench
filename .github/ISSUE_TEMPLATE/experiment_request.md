@@ -43,15 +43,4 @@ assignees: ''
 
 - [ ] `concurrency` — levels 1 / 2 / 4 / 8 (default Pass 1)
 
-## Available Weights
-<!-- List quantization variants and where to obtain them -->
-| Format | Quantization | Source URL |
-|--------|-------------|------------|
-| GGUF | | |
-| MLX | | |
-| AWQ / GPTQ | | |
-
-## Motivation
-<!-- Why is this model worth benchmarking? What comparison does it enable? -->
-
 ## Additional Context
