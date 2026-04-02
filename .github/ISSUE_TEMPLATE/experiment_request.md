@@ -41,6 +41,9 @@ assignees: ''
 
 **Concurrency** — closed-loop parallel requests, measures aggregate throughput & latency under load
 
-- [ ] `concurrency` — levels 1 / 2 / 4 / 8 (default Pass 1)
+- [ ] `Pass 1` — Coarse scan · levels 1 / 2 / 4 / 8 · tracks gen-512, gen-2048
+- [ ] `Pass 2` — Boundary refinement · higher levels (model-dependent) · tracks gen-512, gen-2048
+- [ ] `Pass 3` — Long response stress · levels from Pass 2 boundary · track gen-8192
+- [ ] `Pass 4` — Optional extensions (Q8_0, prefill concurrency, open-loop arrival rate)
 
 ## Additional Context
