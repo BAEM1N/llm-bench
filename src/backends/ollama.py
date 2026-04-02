@@ -54,6 +54,10 @@ class OllamaBackend(BaseBackend):
     def get_model_memory_gb(self) -> float:
         return getattr(self, "_model_memory_gb", 0.0)
 
+    @property
+    def memory_method(self) -> str:
+        return "rss_delta"
+
     def unload_model(self) -> None:
         # Ollama는 자동 메모리 관리, 명시적 언로드는 불필요
         self._model_id = ""

@@ -18,31 +18,25 @@ enabling unprecedented information exchange and collaboration. Artificial intell
 emerged as transformative technologies, enabling computers to perform tasks that once required human intelligence. \
 """
 
-# 생성 트랙 꼬리 지시문 — max_tokens에 따라 선택
-# 짧은 트랙(≤2048): 자유 서술로 충분
-# 긴 트랙(>2048): 번호 매기기 형식으로 모델이 EOS를 내기 어렵게 유도
-_TAIL_SHORT = "Continue writing the next detailed technical section at length:"
+# 생성 트랙 꼬리 지시문 — 모든 트랙에서 동일한 번호 매기기 형식 사용
+# 일관된 태스크 구조로 트랙 간 공정 비교 보장.
+# 짧은 트랙은 일부 질문만 답하고 끝남 — 이것이 바로 측정 목표.
+_TAIL_NUMBERED = """\
+Write a comprehensive technical FAQ covering the history, architecture, \
+performance, and applications of computing systems. \
+Number each question and provide detailed multi-sentence answers with examples. \
+Do not stop early — continue answering until the response is complete. Question 1:"""
 
-_TAIL_4096 = """\
-Write a comprehensive technical FAQ with detailed answers covering the history, \
-architecture, performance, and future of computing systems. \
-Number each question and provide thorough multi-sentence answers with examples. \
-Do not summarize or stop until all questions are fully answered. Question 1:"""
-
-_TAIL_8192 = """\
-Write a comprehensive technical encyclopedia with detailed entries. \
-For each entry write a complete explanation covering definition, historical context, \
-technical details, practical applications, and current research directions. \
-Number every entry and do not stop or summarize until the encyclopedia is complete. Entry 1:"""
+_TAIL_NUMBERED_TOKENS = 45  # 꼬리 근사 토큰 수
 
 
 def _pick_tail(max_tokens: int) -> tuple:
-    """꼬리 지시문과 그 근사 토큰 수 반환."""
-    if max_tokens <= 2048:
-        return _TAIL_SHORT, 15
-    if max_tokens <= 4096:
-        return _TAIL_4096, 45
-    return _TAIL_8192, 45
+    """꼬리 지시문과 그 근사 토큰 수 반환.
+
+    모든 트랙에 동일한 numbered 형식을 사용하여 태스크 구조를 통일.
+    max_tokens 인자는 하위 호환성을 위해 유지하나 현재는 사용하지 않음.
+    """
+    return _TAIL_NUMBERED, _TAIL_NUMBERED_TOKENS
 
 
 def build_prefill_prompt(target_tokens: int) -> str:

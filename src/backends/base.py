@@ -40,6 +40,11 @@ class BaseBackend(ABC):
         """모델 로드 후 점유 메모리 반환 (GB). 측정 불가 시 0.0."""
         return 0.0
 
+    @property
+    def memory_method(self) -> str:
+        """메모리 측정 방식 식별자. 서브클래스에서 오버라이드."""
+        return "unknown"
+
     @abstractmethod
     def get_version(self) -> str:
         """백엔드 버전 반환."""

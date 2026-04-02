@@ -562,6 +562,7 @@ SUMMARY_FIELDS = [
     "timestamp", "hardware_id", "comparison_mode", "backend", "backend_version",
     "model", "architecture", "total_params", "active_params", "quantization",
     "track_id", "concurrency", "run_number",
+    "concurrency_mode",  # "parallel" (HTTP backends) | "queued_gpu" (MLX)
     "completed_requests", "failed_requests", "success_rate",
     "makespan_s", "aggregate_output_tokens", "aggregate_gen_tps",
     "ttft_p50_ms", "ttft_p95_ms", "latency_p50_s", "latency_p95_s",
@@ -751,6 +752,7 @@ def run_concurrent_benchmark(
                             ))
 
                             ts = datetime.now().isoformat()
+                            cc_mode = "queued_gpu" if backend_name == "mlx" else "parallel"
                             meta = dict(
                                 timestamp=ts, hardware_id=hw_id, comparison_mode="C",
                                 backend=backend_name, backend_version=backend.version,
@@ -759,6 +761,7 @@ def run_concurrent_benchmark(
                                 active_params=model_cfg["active_params"],
                                 quantization=quant_cfg["name"],
                                 track_id=track_id, concurrency=level, run_number=run_num,
+                                concurrency_mode=cc_mode,
                             )
 
                             for idx, r in enumerate(raw_results):

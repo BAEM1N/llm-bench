@@ -10,7 +10,7 @@ from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from .metrics import BenchmarkResult, append_result, aggregate_results, median_result
-from .thermal import wait_for_cooldown, log_temp
+from .thermal import wait_for_cooldown, log_temp, log_power
 from .prompt_gen import build_prefill_prompt, build_generation_prompt
 from .backends.ollama import OllamaBackend
 from .backends.lmstudio import LMStudioBackend
@@ -125,6 +125,7 @@ def run_track(
             )
 
         temp_info = log_temp()
+        power_info = log_power()
 
         try:
             result = run_one(backend, prompt, max_tokens, gen_cfg)
@@ -141,6 +142,9 @@ def run_track(
             prefill_tps_source = "ttft_estimate"
 
         hit_rate = round(result.output_tokens / max_tokens, 4) if track_type == "generation" else -1.0
+
+        total_power_w = power_info["total_power_w"]
+        efficiency = round(result.gen_tps / total_power_w, 4) if total_power_w > 0 else -1.0
 
         bench_result = BenchmarkResult(
             timestamp=datetime.now().isoformat(),
@@ -169,6 +173,11 @@ def run_track(
             context_window=gen_cfg["context_window"],
             prefill_tps_source=prefill_tps_source,
             actual_runs=0,  # 루프 완료 후 일괄 업데이트
+            cpu_power_w=power_info["cpu_power_w"],
+            gpu_power_w=power_info["gpu_power_w"],
+            efficiency_tps_per_w=efficiency,
+            peak_memory_method=backend.memory_method,
+            schema_version="2",
         )
 
         append_result(bench_result, output_path)
@@ -223,14 +232,18 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
     prefill_tracks = config.get("prefill_tracks", [])
     all_results = []
 
-    # Mode B 경고: llamacpp 단일 엔진으로 하드웨어만 비교해야 함
+    # Mode B: llamacpp 단일 엔진으로 강제 필터링
     if comparison_mode == "B":
-        active_backends = [b for b in backends if config["backends"].get(b, {}).get("enabled", True)]
-        if len(active_backends) > 1:
-            console.print("[yellow]⚠ Mode B: 여러 백엔드 실행 중 — 하드웨어 비교는 llamacpp 단일 엔진 권장[/yellow]")
-        if any(b != "llamacpp" for b in active_backends):
-            non_llama = [b for b in active_backends if b != "llamacpp"]
-            console.print(f"[yellow]⚠ Mode B: {non_llama} 포함 — 순수 하드웨어 비교 아님 (llamacpp + 동일 GGUF 사용 권장)[/yellow]")
+        non_llama = [b for b in backends if b != "llamacpp"]
+        if non_llama:
+            console.print(
+                f"[yellow]⚠ Mode B: {non_llama} 자동 제외 — "
+                "normalized engine 비교는 llamacpp + 동일 GGUF만 허용[/yellow]"
+            )
+            backends = [b for b in backends if b == "llamacpp"]
+        if not backends:
+            console.print("[red]Mode B: llamacpp 백엔드가 없음 — 실험 중단[/red]")
+            return
 
     for backend_name in backends:
         bcfg = config["backends"].get(backend_name, {})

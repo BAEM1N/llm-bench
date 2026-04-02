@@ -1,8 +1,9 @@
-"""CPU 온도 모니터링 — thermal throttling 감지 및 대기.
+"""CPU 온도 + 전력 모니터링 — thermal throttling 감지, 전력/효율 측정.
 
 플랫폼별 지원:
-  macOS  : powermetrics (thermal pressure level → 근사 온도)
-  Linux  : lm-sensors `sensors -j` → /sys/class/thermal fallback
+  macOS  : powermetrics (thermal pressure → 근사 온도, cpu_power_w / gpu_power_w)
+  Linux  : lm-sensors `sensors -j` → /sys/class/thermal fallback (온도)
+           Intel RAPL 200ms 샘플 (CPU 전력), nvidia-smi (GPU 전력)
 """
 import glob
 import json
@@ -149,4 +150,121 @@ def log_temp() -> dict:
         "cpu_temp_celsius": temp,
         "pressure_level": pressure,
         "temp_available": temp is not None,
+    }
+
+
+# ─── Power measurement ───────────────────────────────────────────────────────
+
+def _parse_power_line(line: str) -> Optional[float]:
+    """'CPU Power: 1808 mW' 또는 'CPU Power: 1.808 W' 형식을 W 단위로 파싱."""
+    try:
+        parts = line.strip().split()
+        # 최소 형식: ["CPU", "Power:", "1808", "mW"]
+        if len(parts) < 3:
+            return None
+        val = float(parts[2])
+        unit = parts[3].lower() if len(parts) > 3 else "w"
+        if unit == "mw":
+            val /= 1000.0
+        return round(val, 3)
+    except (ValueError, IndexError):
+        return None
+
+
+def _macos_power() -> dict:
+    """powermetrics cpu_power 샘플러로 CPU/GPU 전력 측정."""
+    try:
+        out = subprocess.check_output(
+            ["sudo", "-n", "powermetrics", "--samplers", "cpu_power", "-n", "1", "-i", "200"],
+            text=True, stderr=subprocess.DEVNULL, timeout=10,
+        )
+        cpu_w = gpu_w = -1.0
+        for line in out.splitlines():
+            line_l = line.strip()
+            if line_l.startswith("CPU Power:"):
+                v = _parse_power_line(line_l)
+                if v is not None:
+                    cpu_w = v
+            elif line_l.startswith("GPU Power:"):
+                v = _parse_power_line(line_l)
+                if v is not None:
+                    gpu_w = v
+        return {"cpu_w": cpu_w, "gpu_w": gpu_w}
+    except Exception:
+        return {"cpu_w": -1.0, "gpu_w": -1.0}
+
+
+def _linux_rapl_cpu_power() -> Optional[float]:
+    """Intel RAPL 200ms 샘플로 CPU 패키지 평균 전력 측정."""
+    rapl_path = "/sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj"
+    try:
+        with open(rapl_path) as f:
+            e1 = int(f.read())
+        t1 = time.perf_counter()
+        time.sleep(0.2)
+        with open(rapl_path) as f:
+            e2 = int(f.read())
+        t2 = time.perf_counter()
+        return round((e2 - e1) / 1e6 / (t2 - t1), 2)  # μJ/s → W
+    except Exception:
+        pass
+    # AMD: /sys/class/powercap/amd_energy/intel-rapl:0/energy_uj (같은 인터페이스)
+    for pattern in glob.glob("/sys/class/powercap/*/energy_uj"):
+        try:
+            with open(pattern) as f:
+                e1 = int(f.read())
+            t1 = time.perf_counter()
+            time.sleep(0.2)
+            with open(pattern) as f:
+                e2 = int(f.read())
+            t2 = time.perf_counter()
+            return round((e2 - e1) / 1e6 / (t2 - t1), 2)
+        except Exception:
+            continue
+    return None
+
+
+def _linux_nvidia_gpu_power() -> Optional[float]:
+    """nvidia-smi로 GPU 전력 합산 (W)."""
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=power.draw", "--format=csv,noheader,nounits"],
+            text=True, stderr=subprocess.DEVNULL, timeout=5,
+        )
+        total = sum(float(line.strip()) for line in out.strip().splitlines() if line.strip())
+        return round(total, 2)
+    except Exception:
+        return None
+
+
+def get_power_watts() -> dict:
+    """CPU/GPU 전력 스냅샷 반환 (W). 측정 불가 필드는 -1."""
+    sys_name = platform.system()
+    if sys_name == "Darwin":
+        return _macos_power()
+    if sys_name == "Linux":
+        cpu_w = _linux_rapl_cpu_power()
+        gpu_w = _linux_nvidia_gpu_power()
+        return {
+            "cpu_w": cpu_w if cpu_w is not None else -1.0,
+            "gpu_w": gpu_w if gpu_w is not None else -1.0,
+        }
+    return {"cpu_w": -1.0, "gpu_w": -1.0}
+
+
+def log_power() -> dict:
+    """현재 전력 소비 스냅샷 반환."""
+    d = get_power_watts()
+    total = -1.0
+    if d["cpu_w"] >= 0 and d["gpu_w"] >= 0:
+        total = round(d["cpu_w"] + d["gpu_w"], 2)
+    elif d["cpu_w"] >= 0:
+        total = d["cpu_w"]
+    elif d["gpu_w"] >= 0:
+        total = d["gpu_w"]
+    return {
+        "cpu_power_w": d["cpu_w"],
+        "gpu_power_w": d["gpu_w"],
+        "total_power_w": total,
+        "power_available": total >= 0,
     }

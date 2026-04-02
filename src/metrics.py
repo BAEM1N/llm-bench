@@ -38,6 +38,13 @@ class BenchmarkResult:
     context_window: int
     prefill_tps_source: str  # "native" | "ttft_estimate" — prefill_tps 신뢰도 지시자
     actual_runs: int         # 실제 성공한 run 수 (measure_runs와 다를 수 있음)
+    # 전력 / 효율
+    cpu_power_w: float       # CPU 전력 (W), 측정 불가 -1
+    gpu_power_w: float       # GPU 전력 (W), 측정 불가 -1
+    efficiency_tps_per_w: float  # gen_tps / total_power_w, 측정 불가 -1
+    # 측정 방법 투명성
+    peak_memory_method: str  # rss_delta | metal_peak | gpu_smi | process_rss | unknown
+    schema_version: str      # CSV 스키마 버전 (하위 호환 감지용)
 
 
 CSV_FIELDS = [f.name for f in BenchmarkResult.__dataclass_fields__.values()]

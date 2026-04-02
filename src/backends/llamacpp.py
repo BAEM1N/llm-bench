@@ -118,6 +118,10 @@ class LlamaCppBackend(BaseBackend):
     def get_model_memory_gb(self) -> float:
         return getattr(self, "_model_memory_gb", 0.0)
 
+    @property
+    def memory_method(self) -> str:
+        return "process_rss"
+
     def unload_model(self) -> None:
         if self._proc:
             self._proc.terminate()
