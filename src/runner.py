@@ -94,7 +94,7 @@ def run_track(
     if track_type == "prefill":
         prompt = build_prefill_prompt(input_tokens)
     else:
-        prompt = build_generation_prompt(input_tokens)
+        prompt = build_generation_prompt(input_tokens, max_tokens)
 
     # Ollama: 트랙별 실제 필요 ctx로 설정 (llama.cpp와 동일 조건)
     if backend_name == "ollama":

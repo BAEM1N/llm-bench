@@ -460,7 +460,7 @@ def run_concurrent_benchmark(
                     if "prefill" in track_id:
                         base_prompt = build_prefill_prompt(input_tokens)
                     else:
-                        base_prompt = build_generation_prompt(input_tokens)
+                        base_prompt = build_generation_prompt(input_tokens, max_tokens)
 
                     console.print(
                         f"\n[bold yellow]── Track: {track_id}[/bold yellow]"

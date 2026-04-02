@@ -15,6 +15,13 @@ assignees: ''
 **Hugging Face Model ID:**
 <!-- e.g. `Qwen/Qwen3.5-9B` -->
 
+## Target Device
+
+- [ ] MacBook Pro 14 (M5 Max, 128GB)
+- [ ] DGX Spark (GB10, 128GB)
+- [ ] Ryzen AI MAX+ 395 (128GB)
+- [ ] Other: 
+
 ## Requested Backends
 - [ ] MLX
 - [ ] llama.cpp
