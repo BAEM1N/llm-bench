@@ -105,9 +105,9 @@
 | **MLX 35B-A3B** | **102.9** | **93.4** | **98.2** | **100.2** |
 | llama.cpp 35B-A3B | 88.2 | 76.5 | 83.4 | 83.0 |
 | Ollama 35B-A3B | 53.5 | 46.5 | 53.1 | 53.1 |
-| MLX 122B-A10B | N/A | N/A | N/A | N/A |
-| llama.cpp 122B-A10B | N/A | N/A | N/A | N/A |
-| Ollama 122B-A10B | N/A | N/A | N/A | N/A |
+| MLX 122B-A10B | OOM | OOM | OOM | OOM |
+| llama.cpp 122B-A10B | OOM | OOM | OOM | OOM |
+| Ollama 122B-A10B | OOM | OOM | OOM | OOM |
 
 > 122B Q8_0: 128GB 유니파이드 메모리 한계 초과 — 전 백엔드 측정 불가
 

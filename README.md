@@ -52,7 +52,7 @@ All models use **Linear Attention + Full Attention (3:1 ratio)** hybrid architec
 | 9B | **59.0** | 51.1 | 41.1 |
 | 27B | **17.2** | 14.9 | 12.8 |
 | 35B-A3B (MoE) | **102.9** | 88.2 | 53.5 |
-| 122B-A10B (MoE) | N/A | N/A | N/A |
+| 122B-A10B (MoE) | OOM | OOM | OOM |
 
 > 122B Q8_0: 128GB 유니파이드 메모리 한계 초과 — 전 백엔드 측정 불가
 

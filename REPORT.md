@@ -76,7 +76,7 @@
 | 35B-A3B (MoE) | Q4_K_M | **18.2** | 21.5 | 33.3 |
 | 35B-A3B (MoE) | Q8_0 | **34.3** | 35.4 | 47.1 |
 | 122B-A10B (MoE) | Q4_K_M | **64.0** | 72.8 | 92.0 |
-| 122B-A10B (MoE) | Q8_0 | N/A | N/A | N/A |
+| 122B-A10B (MoE) | Q8_0 | OOM | OOM | OOM |
 
 > Ollama가 llama.cpp 대비 **2~3배 많은 메모리** 사용 → 262K KV 캐시 전체 pre-allocate 포함  
 > 122B Q8_0: 예상 ~128GB (MLX) / ~145GB (llama.cpp) / ~180GB (Ollama) → 128GB 한계 초과
@@ -115,9 +115,9 @@
 | **MLX 35B-A3B** | **102.9** | **93.4** | **98.2** | **100.2** |
 | llama.cpp 35B-A3B | 88.2 | 76.5 | 83.4 | 83.0 |
 | Ollama 35B-A3B | 53.5 | 46.5 | 53.1 | 53.1 |
-| MLX 122B-A10B | N/A | N/A | N/A | N/A |
-| llama.cpp 122B-A10B | N/A | N/A | N/A | N/A |
-| Ollama 122B-A10B | N/A | N/A | N/A | N/A |
+| MLX 122B-A10B | OOM | OOM | OOM | OOM |
+| llama.cpp 122B-A10B | OOM | OOM | OOM | OOM |
+| Ollama 122B-A10B | OOM | OOM | OOM | OOM |
 
 > 122B Q8_0: 128GB 유니파이드 메모리 초과 — 전 백엔드 측정 불가
 
@@ -175,7 +175,7 @@
 | 9B | 19,457 | 66,140 | 188,227 | 427,724 | **565,341** |
 | 27B | 10,118 | 37,026 | 119,515 | 310,444 | **434,610** |
 | 35B-A3B | 18,628 | 64,905 | 186,278 | 431,571 | **567,943** |
-| 122B-A10B | N/A | N/A | N/A | N/A | N/A |
+| 122B-A10B | OOM | OOM | OOM | OOM | OOM |
 
 > 122B Q8_0: 128GB 메모리 한계 초과
 
