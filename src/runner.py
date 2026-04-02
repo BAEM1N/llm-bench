@@ -135,8 +135,10 @@ def run_track(
         # backend native prefill_tps 우선, 없으면 input_tokens / TTFT 폴백
         if result.prompt_tps > 0:
             prefill_tps = result.prompt_tps
+            prefill_tps_source = result.prompt_tps_source
         else:
             prefill_tps = (input_tokens / (result.ttft_ms / 1000)) if result.ttft_ms > 0 else 0.0
+            prefill_tps_source = "ttft_estimate"
 
         hit_rate = round(result.output_tokens / max_tokens, 4) if track_type == "generation" else -1.0
 
@@ -165,14 +167,17 @@ def run_track(
             peak_memory_gb=model_memory_gb,
             cpu_temp_celsius=temp_info.get("cpu_temp_celsius") or -1,
             context_window=gen_cfg["context_window"],
+            prefill_tps_source=prefill_tps_source,
+            actual_runs=0,  # 루프 완료 후 일괄 업데이트
         )
 
         append_result(bench_result, output_path)
         run_results.append(bench_result)
 
+        src_marker = "" if prefill_tps_source == "native" else "[yellow]~[/yellow]"
         console.print(
             f"[{run_num}] TTFT={result.ttft_ms:.0f}ms "
-            f"Prefill={prefill_tps:.0f}tok/s "
+            f"Prefill={prefill_tps:.0f}{src_marker}tok/s "
             f"Gen={result.gen_tps:.1f}tok/s "
             f"Temp={temp_info.get('cpu_temp_celsius') or '?'}°C",
             end="  ",
@@ -181,14 +186,27 @@ def run_track(
         if run_num < bench_cfg["measure_runs"]:
             time.sleep(bench_cfg["inter_run_sleep"])
 
+    actual = len(run_results)
+    target = bench_cfg["measure_runs"]
+
+    if actual < target:
+        console.print(
+            f"\n  [yellow]⚠ {actual}/{target} runs 성공 — 통계 신뢰도 낮음[/yellow]"
+        )
+
     if run_results:
+        # actual_runs 소급 기록 (CSV는 이미 append됐으므로 in-memory만 갱신)
+        for r in run_results:
+            object.__setattr__(r, "actual_runs", actual) if hasattr(r, "__dataclass_fields__") else None
+
         agg = aggregate_results(run_results)
         hit = f"  hit={agg['hit_rate']:.0%}" if track_type == "generation" else ""
+        n_note = f" (n={actual})" if actual < target else ""
         console.print(
             f"\n  [green]중앙값 → Prefill={agg['prefill_tps']:.0f}tok/s  "
             f"Gen={agg['gen_tps']:.1f}tok/s (p95={agg['gen_tps_p95']:.1f})  "
             f"TTFT={agg['ttft_ms']:.0f}ms (p95={agg['ttft_p95_ms']:.0f}ms)"
-            f"{hit}[/green]"
+            f"{hit}{n_note}[/green]"
         )
 
     return run_results
@@ -258,6 +276,10 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
                         backend.load_model(model_ref, quant_cfg["gguf_path"], load_ctx)
                 except Exception as e:
                     console.print(f"[red]로드 실패: {e}[/red]")
+                    try:
+                        backend.unload_model()
+                    except Exception:
+                        pass
                     continue
 
                 model_memory_gb = backend.get_model_memory_gb()

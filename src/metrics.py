@@ -36,6 +36,8 @@ class BenchmarkResult:
     peak_memory_gb: float
     cpu_temp_celsius: float # 측정 불가 시 -1
     context_window: int
+    prefill_tps_source: str  # "native" | "ttft_estimate" — prefill_tps 신뢰도 지시자
+    actual_runs: int         # 실제 성공한 run 수 (measure_runs와 다를 수 있음)
 
 
 CSV_FIELDS = [f.name for f in BenchmarkResult.__dataclass_fields__.values()]
@@ -50,7 +52,7 @@ def append_result(result: BenchmarkResult, path: Path) -> None:
         writer.writerow(asdict(result))
 
 
-def _percentile(data: list, p: float) -> float:
+def percentile(data: list, p: float) -> float:
     if not data:
         return 0.0
     s = sorted(data)
@@ -67,7 +69,7 @@ def aggregate_results(results: list) -> dict:
         return statistics.median(getattr(r, key) for r in results)
 
     def p95(key):
-        return _percentile([getattr(r, key) for r in results], 95)
+        return percentile([getattr(r, key) for r in results], 95)
 
     return {
         "ttft_ms":          med("ttft_ms"),

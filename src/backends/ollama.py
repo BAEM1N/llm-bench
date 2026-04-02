@@ -135,10 +135,12 @@ class OllamaBackend(BaseBackend):
         else:
             prompt_tps = 0.0
 
+        source = "native" if prompt_tps > 0 else "ttft_estimate"
         return GenerateResult(
             ttft_ms=round(ttft_ms, 2),
             gen_tps=round(gen_tps, 2),
             prompt_tps=round(prompt_tps, 2),
+            prompt_tps_source=source,
             total_latency_s=round(total_latency_s, 3),
             output_tokens=output_tokens,
         )

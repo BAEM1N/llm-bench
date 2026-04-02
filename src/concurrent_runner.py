@@ -37,6 +37,7 @@ from rich.table import Table
 
 from .prompt_gen import build_generation_prompt, build_prefill_prompt
 from .runner import make_backend, load_config
+from .metrics import percentile as _percentile
 
 console = Console()
 
@@ -447,14 +448,6 @@ async def _open_loop_run(
 
 
 # ─── Statistics ──────────────────────────────────────────────────────────────
-
-def _percentile(data: list, p: float) -> float:
-    if not data:
-        return 0.0
-    s = sorted(data)
-    rank = max(1, int(len(s) * p / 100 + 0.5))
-    return s[min(rank - 1, len(s) - 1)]
-
 
 def _compute_summary(raw_results: list) -> dict:
     ok = [r for r in raw_results if r["status"] == "ok"]

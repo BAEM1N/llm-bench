@@ -146,14 +146,18 @@ class VLLMBackend(BaseBackend):
             "top_p": top_p,
             "repetition_penalty": repeat_penalty,
             "stream": True,
+            # 마지막 chunk에 usage 포함 요청 (vLLM 0.4.2+)
+            "stream_options": {"include_usage": True},
         }
 
         t_start = time.perf_counter()
         t_first = None
         output_tokens = 0
+        token_count = 0  # stream_options 미지원 시 count 기반 폴백
 
         with httpx.Client(timeout=600) as client:
             with client.stream("POST", f"{self.base_url}/v1/completions", json=payload) as resp:
+                resp.raise_for_status()
                 for line in resp.iter_lines():
                     if not line or line == "data: [DONE]":
                         continue
@@ -166,16 +170,17 @@ class VLLMBackend(BaseBackend):
                     choices = chunk.get("choices", [])
                     if choices:
                         text = choices[0].get("text", "")
-                        if text and t_first is None:
-                            t_first = time.perf_counter()
-                        finish_reason = choices[0].get("finish_reason")
-                        usage = chunk.get("usage")
-                        if usage:
-                            output_tokens = usage.get("completion_tokens", 0)
-                        if finish_reason:
-                            if not output_tokens:
-                                output_tokens = choices[0].get("logprobs", {}).get("token_ids", [])
-                                output_tokens = len(output_tokens) if isinstance(output_tokens, list) else 0
+                        if text:
+                            if t_first is None:
+                                t_first = time.perf_counter()
+                            token_count += 1
+                    usage = chunk.get("usage")
+                    if usage:
+                        output_tokens = usage.get("completion_tokens", 0)
+
+        # stream_options 미지원 구버전 폴백
+        if output_tokens == 0:
+            output_tokens = token_count
 
         t_end = time.perf_counter()
         t_first = t_first or t_end
@@ -188,7 +193,8 @@ class VLLMBackend(BaseBackend):
         return GenerateResult(
             ttft_ms=round(ttft_ms, 2),
             gen_tps=round(gen_tps, 2),
-            prompt_tps=0.0,  # vLLM streaming에서 prefill TPS 별도 측정 불가
+            prompt_tps=0.0,
+            prompt_tps_source="ttft_estimate",  # vLLM은 prefill TPS 미제공
             total_latency_s=round(total_latency_s, 3),
             output_tokens=output_tokens,
         )

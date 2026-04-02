@@ -90,7 +90,8 @@ class LMStudioBackend(BaseBackend):
         return GenerateResult(
             ttft_ms=round(ttft_ms, 2),
             gen_tps=round(gen_tps, 2),
-            prompt_tps=0.0,  # LM Studio streaming에서 prompt TPS 미제공
+            prompt_tps=0.0,
+            prompt_tps_source="ttft_estimate",  # LM Studio는 prefill TPS 미제공
             total_latency_s=round(total_latency_s, 3),
             output_tokens=output_tokens,
         )

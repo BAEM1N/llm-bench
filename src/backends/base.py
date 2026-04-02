@@ -10,6 +10,7 @@ class GenerateResult:
     prompt_tps: float       # Prompt processing tokens/sec
     total_latency_s: float  # End-to-end latency (s)
     output_tokens: int
+    prompt_tps_source: str = "native"  # "native" | "ttft_estimate"
 
 
 class BaseBackend(ABC):
