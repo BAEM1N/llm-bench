@@ -60,6 +60,32 @@ prefill_tracks:
     max_tokens: 10
     input_tokens: 131072
 
+# ─────────────────────────────────────────
+# Concurrency Benchmark (Phase 1 — Closed-loop)
+# src/concurrent_runner.py 에서 사용
+# ─────────────────────────────────────────
+concurrency_benchmark:
+  enabled: true
+  # 동시 요청 수 레벨 (Pass 1 Coarse Scan)
+  levels: [1, 2, 4, 8]
+  warmup_runs: 1
+  measure_runs: 5
+  request_timeout_s: 600
+  # 동일 프롬프트 캐시/dedup 방지
+  prompt_nonce: true
+  # 포함할 트랙 (generation_tracks / prefill_tracks ID 기준)
+  include_generation_tracks: ["gen-512", "gen-2048", "gen-8192"]
+  include_prefill_tracks: []       # Phase 2에서 추가
+  # SLA 기준
+  sla:
+    success_rate_min: 0.99
+    ttft_p95_ms: 3000              # gen-512, gen-2048 기준
+    latency_p95_s: 30
+    req_gen_tps_p50_min: 10
+    # gen-8192 완화 SLA
+    ttft_p95_ms_long: 5000
+    latency_p95_s_long: 180
+
 backends:
   ollama:
     enabled: true
