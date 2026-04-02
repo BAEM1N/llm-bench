@@ -12,14 +12,8 @@ assignees: ''
 
 ## Model
 
-| Field | Value |
-|-------|-------|
-| Hugging Face Model ID | <!-- e.g. `Qwen/Qwen3.5-9B` --> |
-| Organization / Author | <!-- e.g. Qwen (Alibaba), Meta, Mistral AI --> |
-| Architecture | <!-- Dense / MoE --> |
-| Parameter count (total / active) | |
-| Context window | |
-| License | |
+**Hugging Face Model ID:**
+<!-- e.g. `Qwen/Qwen3.5-9B` -->
 
 ## Requested Backends
 - [ ] MLX
