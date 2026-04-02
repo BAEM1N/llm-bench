@@ -1,4 +1,4 @@
-# MacBook Pro — M5 Max (128GB Unified Memory)
+# MacBook Pro 14 — M5 Max (128GB Unified Memory)
 
 **실험 기간**: 2026-03-31 17:44 ~ 2026-04-02 04:11  
 **상태**: ✅ 완료 (187/189 — Ollama 27B prefill-128k 2건 OOM 제외)
@@ -23,7 +23,7 @@
 
 | 항목 | 값 |
 |------|-----|
-| 하드웨어 | MacBook Pro M5 Max, 128GB Unified Memory |
+| 하드웨어 | MacBook Pro 14 (M5 Max), 128GB Unified Memory |
 | mlx-lm | 0.31.2 |
 | llama.cpp | b8500 (342d6125b) |
 | Ollama | 0.18.2 |

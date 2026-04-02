@@ -10,7 +10,7 @@ Measured: Generation TPS, Prefill TPS, TTFT, Peak Memory, E2E Latency.
 
 | Platform | Memory | Status | Backends |
 |----------|--------|--------|----------|
-| **MacBook Pro (M5 Max)** | 128GB Unified | ✅ Complete | MLX · llama.cpp · Ollama |
+| **MacBook Pro 14 (M5 Max)** | 128GB Unified | ✅ Complete | mlx-lm 0.31.2 · llama.cpp b8500 · Ollama 0.18.2 |
 | **NVIDIA DGX Spark (GB10)** | 128GB Unified | 🔜 Planned | vLLM · llama.cpp · Ollama |
 | **AMD Ryzen AI MAX+ 395** | 128GB DDR5 | 🔜 Planned | llama.cpp (ROCm) · Ollama · vLLM (ROCm) |
 
@@ -29,8 +29,9 @@ All models use **Linear Attention + Full Attention (3:1 ratio)** hybrid architec
 
 ---
 
-## Results: MacBook Pro M5 Max (128GB)
+## Results: MacBook Pro 14 (M5 Max) (128GB)
 
+> Backends: **mlx-lm 0.31.2** · **llama.cpp b8500** · **Ollama 0.18.2**  
 > Warmup 1 run + median of 4 runs. Thermal guard at ~88°C → 60s cooldown.
 >
 > **해석 주의**: MLX는 자체 4-bit 가중치, llama.cpp/Ollama는 unsloth GGUF 사용 → 엔진+가중치 패키지 비교에 가까움. 상세 caveat → [REPORT.md](REPORT.md#측정-한계-및-해석-주의사항)
@@ -140,7 +141,7 @@ Hardware-specific config: set `hardware.id` in `config.yaml` (`macbook-m-series`
 
 | 문서 | 내용 |
 |------|------|
-| [REPORT.md](REPORT.md) | M5 Max 전체 상세 보고서 (모든 수치, caveat 포함) |
+| [REPORT.md](REPORT.md) | MacBook Pro 14 (M5 Max) 전체 상세 보고서 (모든 수치, caveat 포함) |
 | [docs/mac-apple-silicon.md](docs/mac-apple-silicon.md) | Mac 실험 환경 및 결과 요약 |
 | [docs/methodology.md](docs/methodology.md) | 측정 방법론, 지표 정의 |
 | [docs/setup.md](docs/setup.md) | 설치 가이드, 온도/메모리 모니터링 명령어 |
@@ -151,7 +152,7 @@ Hardware-specific config: set `hardware.id` in `config.yaml` (`macbook-m-series`
 
 ## Pending
 
-- [x] ~~MacBook Pro M5 Max (MLX / llama.cpp / Ollama)~~
+- [x] ~~MacBook Pro 14 (M5 Max) (MLX / llama.cpp / Ollama)~~
 - [ ] DGX Spark — vLLM + llama.cpp CUDA + Ollama
 - [ ] Ryzen AI MAX+ 395 — llama.cpp ROCm + Ollama
 - [ ] Cross-platform comparison report

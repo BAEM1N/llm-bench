@@ -1,4 +1,4 @@
-# Setup & Monitoring — MacBook Pro M5 Max
+# Setup & Monitoring — MacBook Pro 14 (M5 Max)
 
 ## 1. 환경 설치
 
