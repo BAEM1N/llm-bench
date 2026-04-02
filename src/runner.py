@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
-from .metrics import BenchmarkResult, append_result, median_result
+from .metrics import BenchmarkResult, append_result, aggregate_results, median_result
 from .thermal import wait_for_cooldown, log_temp
 from .prompt_gen import build_prefill_prompt, build_generation_prompt
 from .backends.ollama import OllamaBackend
@@ -84,6 +84,7 @@ def run_track(
     hardware_id: str,
     output_path: Path,
     model_memory_gb: float = 0.0,
+    comparison_mode: str = "A",
 ) -> list[BenchmarkResult]:
 
     track_id = track["id"]
@@ -138,9 +139,12 @@ def run_track(
         else:
             prefill_tps = (input_tokens / (result.ttft_ms / 1000)) if result.ttft_ms > 0 else 0.0
 
+        hit_rate = round(result.output_tokens / max_tokens, 4) if track_type == "generation" else -1.0
+
         bench_result = BenchmarkResult(
             timestamp=datetime.now().isoformat(),
             hardware_id=hardware_id,
+            comparison_mode=comparison_mode,
             backend=backend_name,
             backend_version=backend.version,
             model=model_cfg["id"],
@@ -158,6 +162,7 @@ def run_track(
             gen_tps=result.gen_tps,
             total_latency_s=result.total_latency_s,
             output_tokens=result.output_tokens,
+            hit_rate=hit_rate,
             peak_memory_gb=model_memory_gb,
             cpu_temp_celsius=temp_info.get("cpu_temp_celsius") or -1,
             context_window=gen_cfg["context_window"],
@@ -178,11 +183,13 @@ def run_track(
             time.sleep(bench_cfg["inter_run_sleep"])
 
     if run_results:
-        med = median_result(run_results)
+        agg = aggregate_results(run_results)
+        hit = f"  hit={agg['hit_rate']:.0%}" if track_type == "generation" else ""
         console.print(
-            f"\n  [green]중앙값 → Prefill={med['prefill_tps']:.0f}tok/s  "
-            f"Gen={med['gen_tps']:.1f}tok/s  "
-            f"TTFT={med['ttft_ms']:.0f}ms[/green]"
+            f"\n  [green]중앙값 → Prefill={agg['prefill_tps']:.0f}tok/s  "
+            f"Gen={agg['gen_tps']:.1f}tok/s (p95={agg['gen_tps_p95']:.1f})  "
+            f"TTFT={agg['ttft_ms']:.0f}ms (p95={agg['ttft_p95_ms']:.0f}ms)"
+            f"{hit}[/green]"
         )
 
     return run_results
@@ -193,6 +200,7 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
     bench_cfg = config["benchmark"]
     thermal_cfg = config.get("thermal", {"enabled": False})
     hardware_id = config.get("hardware", {}).get("id", "unknown")
+    comparison_mode = config.get("comparison_mode", "A")
 
     gen_tracks = config.get("generation_tracks", [])
     prefill_tracks = config.get("prefill_tracks", [])
@@ -263,6 +271,7 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
                         track, "generation",
                         bench_cfg, thermal_cfg, gen_cfg,
                         hardware_id, output_path, model_memory_gb,
+                        comparison_mode,
                     )
                     all_results.extend(results)
                     time.sleep(bench_cfg["inter_track_sleep"])
@@ -275,6 +284,7 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
                         track, "prefill",
                         bench_cfg, thermal_cfg, gen_cfg,
                         hardware_id, output_path, model_memory_gb,
+                        comparison_mode,
                     )
                     all_results.extend(results)
                     time.sleep(bench_cfg["inter_track_sleep"])
@@ -300,20 +310,22 @@ def _print_summary(results: list[BenchmarkResult]) -> None:
         groups[(r.backend, r.model, r.quantization, r.track_id)].append(r)
 
     table = Table(show_header=True, header_style="bold magenta")
-    for col in ["Backend", "Model", "Quant", "Track", "TTFT(ms)", "Prefill TPS", "Gen TPS", "Mem(GB)", "Temp(°C)"]:
-        table.add_column(col, justify="right" if col not in ["Backend","Model","Quant","Track"] else "left")
+    left = ["Backend", "Model", "Quant", "Track", "Mode"]
+    for col in left + ["TTFT p50/p95(ms)", "Prefill TPS", "Gen p50/p95(tok/s)", "Lat p95(s)", "Hit%", "Mem(GB)"]:
+        table.add_column(col, justify="left" if col in left else "right")
 
     for key, rs in sorted(groups.items()):
-        med = median_result(rs)
+        agg = aggregate_results(rs)
         r = rs[0]
-        temp = f"{med.get('cpu_temp_celsius', -1):.0f}" if med.get("cpu_temp_celsius", -1) > 0 else "N/A"
+        hit = f"{agg['hit_rate']:.0%}" if r.track_type == "generation" else "—"
         table.add_row(
-            r.backend, r.model, r.quantization, r.track_id,
-            f"{med['ttft_ms']:.0f}",
-            f"{med['prefill_tps']:.0f}",
-            f"{med['gen_tps']:.1f}",
-            f"{med['peak_memory_gb']:.1f}",
-            temp,
+            r.backend, r.model, r.quantization, r.track_id, r.comparison_mode,
+            f"{agg['ttft_ms']:.0f} / {agg['ttft_p95_ms']:.0f}",
+            f"{agg['prefill_tps']:.0f}",
+            f"{agg['gen_tps']:.1f} / {agg['gen_tps_p95']:.1f}",
+            f"{agg['latency_p95_s']:.1f}",
+            hit,
+            f"{agg['peak_memory_gb']:.1f}",
         )
 
     console.print(table)

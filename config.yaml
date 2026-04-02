@@ -1,3 +1,6 @@
+# A=practical stack, B=normalized engine (same backend/weights across hw), C=concurrency
+comparison_mode: A
+
 generation:
   temperature: 0
   top_p: 1.0
