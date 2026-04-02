@@ -50,7 +50,7 @@
 | mlx-lm | 0.31.2 |
 | llama.cpp | b8500 (342d6125b) |
 | Ollama | 0.18.2 |
-| 측정 방식 | warmup 1회 + measure 5회, 중앙값 |
+| 측정 방식 | warmup 1회 + measure 4회 (run 2~5), 중앙값 |
 | 온도 가드 | Heavy pressure (~88°C) → 60s 쿨다운 대기 |
 
 ### 백엔드 설정

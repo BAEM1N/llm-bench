@@ -6,27 +6,31 @@
 
 | 항목 | 값 |
 |------|-----|
-| Warmup | 1회 (결과 제외) |
-| Measure | 5회 |
+| Warmup | 1회 (결과 제외, config `warmup_runs`) |
+| Measure | 4회 (config `measure_runs: 5`에서 run_number 2~5) |
 | 집계 | 중앙값 (median) |
 | 온도 가드 | Heavy pressure (~88°C) → 60초 쿨다운 후 재개 |
-| Inter-run sleep | 2초 |
-| Inter-track sleep | 5초 |
-| Inter-model sleep | 10초 |
+| Inter-run sleep | 5초 (config `inter_run_sleep`) |
+| Inter-track sleep | 60초 (config `inter_track_sleep`) |
+| Inter-model sleep | 120초 (config `inter_model_sleep`) |
 
 ---
 
 ## Tracks
 
 ### Generation Track
-짧은 고정 입력(64 tokens), 출력 길이 고정으로 **순수 generation 속도** 측정.
+짧은 입력, 출력 길이 고정으로 **순수 generation 속도** 측정.
 
-| Track ID | Input | Output |
-|----------|------:|-------:|
-| gen-512 | 64 | 512 |
-| gen-2048 | 64 | 2,048 |
-| gen-4096 | 64 | 4,096 |
-| gen-8192 | 64 | 8,192 |
+> ⚠️ config의 `input_tokens: 64`는 CSV 기록용이며, 실제 프롬프트는 `build_generation_prompt(track_id)` 고정 문자열 사용.
+> 실측 입력 길이: gen-512 ≈47 tok, gen-2048 ≈60 tok, gen-4096 ≈69 tok, gen-8192 ≈74 tok.
+> generation TPS에 대한 영향은 미미(출력 512~8192 토큰 대비 입력 <75 토큰).
+
+| Track ID | 실측 Input (tok) | Output |
+|----------|-----------------:|-------:|
+| gen-512 | ~47 | 512 |
+| gen-2048 | ~60 | 2,048 |
+| gen-4096 | ~69 | 4,096 |
+| gen-8192 | ~74 | 8,192 |
 
 ### Prefill Track
 출력 최소(10 tokens), 입력 길이 변화로 **KV cache 채우기 속도** 측정.
@@ -57,9 +61,12 @@
   ⚠️ Ollama TTFT는 max_tokens에 비례 증가하는 이상 동작 있음 — gen_tps만 신뢰 가능.
 
 ### Prefill TPS (tok/s)
-- **llama.cpp**: `timings.prompt_per_second`
-- **MLX**: `response.prompt_tps`
-- **Ollama**: `prompt_eval_count / (prompt_eval_duration_ns / 1e9)` (TTFT 이슈로 신뢰 낮음)
+백엔드 native 값 우선, 미제공 시 `input_tokens / TTFT` 폴백.
+
+- **llama.cpp**: `timings.prompt_per_second` (native)
+- **MLX**: `response.prompt_tps` (native)
+- **Ollama**: `prompt_eval_count / (prompt_eval_duration_ns / 1e9)` (native)
+  - gen 트랙에서는 TTFT 이상으로 신뢰 낮음 → Prefill 트랙 결과만 유효
 
 ### Peak Memory (GB)
 - **MLX**: `mx.metal.get_peak_memory()` — 모델 로드 전 `reset_peak_memory()` 후 측정
@@ -82,7 +89,7 @@
 
 ## Thermal Guard
 
-Apple Silicon에서 thermal pressure level로 온도 추정:
+MacBook Pro M5 Max에서 thermal pressure level로 온도 추정:
 
 | Pressure Level | 추정 온도 |
 |----------------|----------|

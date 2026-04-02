@@ -98,13 +98,14 @@ def run_track(
 
     console.print(f"\n  [dim]{track_id}[/dim]  in≈{input_tokens} out={max_tokens}", end=" ")
 
-    # 워밍업
-    try:
-        run_one(backend, prompt, max_tokens, gen_cfg)
-        console.print("🔥", end=" ")
-    except Exception as e:
-        console.print(f"[red]워밍업 실패: {e}[/red]")
-        return []
+    # 워밍업 (bench_cfg["warmup_runs"]회)
+    for _ in range(bench_cfg.get("warmup_runs", 1)):
+        try:
+            run_one(backend, prompt, max_tokens, gen_cfg)
+            console.print("🔥", end=" ")
+        except Exception as e:
+            console.print(f"[red]워밍업 실패: {e}[/red]")
+            return []
 
     run_results = []
 
@@ -126,8 +127,11 @@ def run_track(
             console.print(f"[red]Run {run_num} 실패: {e}[/red]")
             continue
 
-        # prefill_tps = prompt_tokens / TTFT
-        prefill_tps = (input_tokens / (result.ttft_ms / 1000)) if result.ttft_ms > 0 else 0.0
+        # backend native prefill_tps 우선, 없으면 input_tokens / TTFT 폴백
+        if result.prompt_tps > 0:
+            prefill_tps = result.prompt_tps
+        else:
+            prefill_tps = (input_tokens / (result.ttft_ms / 1000)) if result.ttft_ms > 0 else 0.0
 
         bench_result = BenchmarkResult(
             timestamp=datetime.now().isoformat(),
@@ -315,7 +319,7 @@ def main():
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--output", default=None)
     parser.add_argument("--backends", nargs="+",
-                        default=["ollama", "lmstudio", "llamacpp", "mlx", "vllm"])
+                        default=["ollama", "llamacpp", "mlx"])
     parser.add_argument("--models", nargs="+", default=[])
     parser.add_argument("--tracks", nargs="+", default=[],
                         help="특정 track만 실행 (e.g. gen-512 prefill-4k)")
