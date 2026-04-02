@@ -193,6 +193,7 @@ def load_concurrent_summary(csv_path: Path) -> pd.DataFrame:
 
 def chart_concurrency_agg_tps(df: pd.DataFrame, out: Path) -> None:
     """동시성별 Aggregate TPS (track별 서브플롯)."""
+    df = df[df["concurrency"] >= 0]  # open-loop rows (concurrency=-1) 제외
     tracks = sorted(df["track_id"].unique())
     n = len(tracks)
     if n == 0:
@@ -205,11 +206,11 @@ def chart_concurrency_agg_tps(df: pd.DataFrame, out: Path) -> None:
         backends = sub["backend"].unique()
         for backend in backends:
             bsub = sub[sub["backend"] == backend]
-            ax.plot(bsub["concurrency"], bsub["agg_gen_tps_p50"],
+            ax.plot(bsub["concurrency"], bsub["aggregate_gen_tps"],
                     marker="o", label=BACKEND_LABELS.get(backend, backend))
         ax.set_title(f"Aggregate TPS — {track_id}")
         ax.set_xlabel("Concurrency")
-        ax.set_ylabel("tok/s (sum, p50)")
+        ax.set_ylabel("tok/s (aggregate)")
         ax.legend(title="backend")
     fig.tight_layout()
     fig.savefig(out / "c01_agg_tps.png", dpi=150)
@@ -218,6 +219,7 @@ def chart_concurrency_agg_tps(df: pd.DataFrame, out: Path) -> None:
 
 def chart_concurrency_p95_latency(df: pd.DataFrame, out: Path) -> None:
     """동시성별 p95 E2E Latency."""
+    df = df[df["concurrency"] >= 0]
     tracks = sorted(df["track_id"].unique())
     n = len(tracks)
     if n == 0:
@@ -242,6 +244,7 @@ def chart_concurrency_p95_latency(df: pd.DataFrame, out: Path) -> None:
 
 def chart_concurrency_p95_ttft(df: pd.DataFrame, out: Path) -> None:
     """동시성별 p95 TTFT."""
+    df = df[df["concurrency"] >= 0]
     tracks = sorted(df["track_id"].unique())
     n = len(tracks)
     if n == 0:
@@ -266,6 +269,7 @@ def chart_concurrency_p95_ttft(df: pd.DataFrame, out: Path) -> None:
 
 def chart_concurrency_success_rate(df: pd.DataFrame, out: Path) -> None:
     """동시성별 Success Rate."""
+    df = df[df["concurrency"] >= 0]
     tracks = sorted(df["track_id"].unique())
     n = len(tracks)
     if n == 0:
@@ -295,6 +299,7 @@ def chart_concurrency_scaling_efficiency(df: pd.DataFrame, out: Path) -> None:
 
     값이 1.0이면 완벽한 선형 스케일링, <1이면 열화.
     """
+    df = df[df["concurrency"] >= 0]
     tracks = sorted(df["track_id"].unique())
     n = len(tracks)
     if n == 0:
@@ -306,13 +311,13 @@ def chart_concurrency_scaling_efficiency(df: pd.DataFrame, out: Path) -> None:
         sub = df[df["track_id"] == track_id].sort_values("concurrency")
         for backend in sub["backend"].unique():
             bsub = sub[sub["backend"] == backend]
-            baseline = bsub[bsub["concurrency"] == 1]["agg_gen_tps_p50"]
+            baseline = bsub[bsub["concurrency"] == 1]["aggregate_gen_tps"]
             if baseline.empty:
                 continue
             base_val = baseline.iloc[0]
             if base_val == 0:
                 continue
-            eff = bsub["agg_gen_tps_p50"] / (bsub["concurrency"] * base_val)
+            eff = bsub["aggregate_gen_tps"] / (bsub["concurrency"] * base_val)
             ax.plot(bsub["concurrency"], eff,
                     marker="o", label=BACKEND_LABELS.get(backend, backend))
         ax.axhline(1.0, color="green", linestyle="--", linewidth=1, label="Ideal")
@@ -327,6 +332,7 @@ def chart_concurrency_scaling_efficiency(df: pd.DataFrame, out: Path) -> None:
 
 def chart_concurrency_online_users(df: pd.DataFrame, out: Path) -> None:
     """SLA 통과 최대 동시성 기준 환산 온라인 사용자 수 (T_user=15/30/60s)."""
+    df = df[df["concurrency"] >= 0]
     # SLA 통과 최대 동시성 (success_rate >= 0.99)
     sla_passed = df[df["success_rate"] >= 0.99]
     if sla_passed.empty:
@@ -335,7 +341,7 @@ def chart_concurrency_online_users(df: pd.DataFrame, out: Path) -> None:
     records = []
     for (backend, track_id), g in sla_passed.groupby(["backend", "track_id"]):
         max_cc = g["concurrency"].max()
-        avg_gen_s = g[g["concurrency"] == max_cc]["avg_gen_time_s"]
+        avg_gen_s = g[g["concurrency"] == max_cc]["latency_p50_s"]
         if avg_gen_s.empty:
             continue
         t_gen = avg_gen_s.iloc[0]

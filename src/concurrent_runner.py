@@ -89,6 +89,7 @@ async def _stream_ollama(
             json=payload,
             timeout=httpx.Timeout(timeout, connect=10.0),
         ) as resp:
+            resp.raise_for_status()
             async for line in resp.aiter_lines():
                 if not line:
                     continue
@@ -160,6 +161,7 @@ async def _stream_llamacpp(
             json=payload,
             timeout=httpx.Timeout(timeout, connect=10.0),
         ) as resp:
+            resp.raise_for_status()
             async for line in resp.aiter_lines():
                 if not line:
                     continue
@@ -235,6 +237,7 @@ async def _stream_vllm(
             json=payload,
             timeout=httpx.Timeout(timeout, connect=10.0),
         ) as resp:
+            resp.raise_for_status()
             async for line in resp.aiter_lines():
                 if not line or line == "data: [DONE]":
                     continue
