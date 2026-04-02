@@ -341,10 +341,15 @@ def chart_concurrency_online_users(df: pd.DataFrame, out: Path) -> None:
     records = []
     for (backend, track_id), g in sla_passed.groupby(["backend", "track_id"]):
         max_cc = g["concurrency"].max()
-        avg_gen_s = g[g["concurrency"] == max_cc]["latency_p50_s"]
-        if avg_gen_s.empty:
+        # 온라인 사용자 추정 기준: concurrency=1 (단일 사용자) latency를 T_gen 기준으로 사용.
+        # max_cc latency를 쓰면 부하 증가에 따른 지연 누적이 사용자 수를 과소 추정함.
+        all_groups = df[(df["backend"] == backend) & (df["track_id"] == track_id)]
+        baseline = all_groups[all_groups["concurrency"] == 1]["latency_p50_s"]
+        if baseline.empty:
+            baseline = g[g["concurrency"] == max_cc]["latency_p50_s"]
+        if baseline.empty:
             continue
-        t_gen = avg_gen_s.iloc[0]
+        t_gen = baseline.iloc[0]
         for t_user in [15, 30, 60]:
             est = max_cc / (t_gen / t_user) if t_gen > 0 else 0
             records.append({

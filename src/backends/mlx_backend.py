@@ -61,6 +61,9 @@ class MLXBackend(BaseBackend):
         from mlx_lm import stream_generate
         from mlx_lm.sample_utils import make_sampler
 
+        # mlx_lm make_sampler: top_p=1.0 → no top-p filtering (greedy when temp=0).
+        # top_p < 1.0 passes the value through; top_p == 1.0 uses 0.0 as sentinel
+        # to disable nucleus sampling entirely — equivalent to top_p=1.0 in other backends.
         sampler = make_sampler(temp=temperature, top_p=top_p if top_p < 1.0 else 0.0)
 
         t_start = time.perf_counter()

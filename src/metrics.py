@@ -27,6 +27,7 @@ class BenchmarkResult:
     max_tokens: int
     # 측정값
     run_number: int
+    run_status: str          # "ok" | "failed" — 실패 run은 측정값 -1/0
     ttft_ms: float          # Time to First Token
     prefill_tps: float      # prompt tokens / TTFT
     gen_tps: float          # generated tokens / gen time

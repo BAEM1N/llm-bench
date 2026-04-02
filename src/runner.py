@@ -112,7 +112,53 @@ def run_track(
             console.print(f"[red]워밍업 실패: {e}[/red]")
             return []
 
-    run_results = []
+    # 행을 버퍼에 모은 뒤 actual_runs 확정 후 일괄 기록
+    # — actual_runs는 루프 종료 전까지 알 수 없으므로 이중 기록을 피함
+    pending: list[BenchmarkResult] = []
+    run_results: list[BenchmarkResult] = []
+
+    def _make_row(run_num: int, status: str, result=None,
+                  prefill_tps=0.0, prefill_tps_source="ttft_estimate",
+                  hit_rate=-1.0, temp_info=None, power_info=None) -> BenchmarkResult:
+        ti = temp_info or {}
+        pi = power_info or {"cpu_power_w": -1.0, "gpu_power_w": -1.0, "total_power_w": -1.0}
+        total_power_w = pi["total_power_w"]
+        efficiency = round((result.gen_tps / total_power_w), 4) if (
+            result and total_power_w > 0) else -1.0
+        return BenchmarkResult(
+            timestamp=datetime.now().isoformat(),
+            hardware_id=hardware_id,
+            comparison_mode=comparison_mode,
+            backend=backend_name,
+            backend_version=backend.version,
+            model=model_cfg["id"],
+            architecture=model_cfg["architecture"],
+            total_params=model_cfg["total_params"],
+            active_params=model_cfg["active_params"],
+            quantization=quant_cfg["name"],
+            track_id=track_id,
+            track_type=track_type,
+            input_tokens=input_tokens,
+            max_tokens=max_tokens,
+            run_number=run_num,
+            run_status=status,
+            ttft_ms=result.ttft_ms if result else -1.0,
+            prefill_tps=round(prefill_tps, 2),
+            gen_tps=result.gen_tps if result else -1.0,
+            total_latency_s=result.total_latency_s if result else -1.0,
+            output_tokens=result.output_tokens if result else 0,
+            hit_rate=hit_rate,
+            peak_memory_gb=model_memory_gb,
+            cpu_temp_celsius=ti.get("cpu_temp_celsius") or -1,
+            context_window=gen_cfg["context_window"],
+            prefill_tps_source=prefill_tps_source,
+            actual_runs=-1,  # 루프 후 확정
+            cpu_power_w=pi["cpu_power_w"],
+            gpu_power_w=pi["gpu_power_w"],
+            efficiency_tps_per_w=efficiency,
+            peak_memory_method=backend.memory_method,
+            schema_version="2",
+        )
 
     for run_num in range(1, bench_cfg["measure_runs"] + 1):
         # 온도 체크
@@ -131,6 +177,9 @@ def run_track(
             result = run_one(backend, prompt, max_tokens, gen_cfg)
         except Exception as e:
             console.print(f"[red]Run {run_num} 실패: {e}[/red]")
+            # 실패 run도 버퍼에 추가 (status="failed", 측정값 -1)
+            pending.append(_make_row(run_num, "failed",
+                                     temp_info=temp_info, power_info=power_info))
             continue
 
         # backend native prefill_tps 우선, 없으면 input_tokens / TTFT 폴백
@@ -147,44 +196,10 @@ def run_track(
         # 반복/루프/저품질 장문도 hit_rate 높게 나올 수 있음.
         hit_rate = round(result.output_tokens / max_tokens, 4) if track_type == "generation" else -1.0
 
-        total_power_w = power_info["total_power_w"]
-        efficiency = round(result.gen_tps / total_power_w, 4) if total_power_w > 0 else -1.0
-
-        bench_result = BenchmarkResult(
-            timestamp=datetime.now().isoformat(),
-            hardware_id=hardware_id,
-            comparison_mode=comparison_mode,
-            backend=backend_name,
-            backend_version=backend.version,
-            model=model_cfg["id"],
-            architecture=model_cfg["architecture"],
-            total_params=model_cfg["total_params"],
-            active_params=model_cfg["active_params"],
-            quantization=quant_cfg["name"],
-            track_id=track_id,
-            track_type=track_type,
-            input_tokens=input_tokens,
-            max_tokens=max_tokens,
-            run_number=run_num,
-            ttft_ms=result.ttft_ms,
-            prefill_tps=round(prefill_tps, 2),
-            gen_tps=result.gen_tps,
-            total_latency_s=result.total_latency_s,
-            output_tokens=result.output_tokens,
-            hit_rate=hit_rate,
-            peak_memory_gb=model_memory_gb,
-            cpu_temp_celsius=temp_info.get("cpu_temp_celsius") or -1,
-            context_window=gen_cfg["context_window"],
-            prefill_tps_source=prefill_tps_source,
-            actual_runs=0,  # 루프 완료 후 일괄 업데이트
-            cpu_power_w=power_info["cpu_power_w"],
-            gpu_power_w=power_info["gpu_power_w"],
-            efficiency_tps_per_w=efficiency,
-            peak_memory_method=backend.memory_method,
-            schema_version="2",
-        )
-
-        append_result(bench_result, output_path)
+        bench_result = _make_row(run_num, "ok", result,
+                                 prefill_tps, prefill_tps_source,
+                                 hit_rate, temp_info, power_info)
+        pending.append(bench_result)
         run_results.append(bench_result)
 
         src_marker = "" if prefill_tps_source == "native" else "[yellow]~[/yellow]"
@@ -199,8 +214,12 @@ def run_track(
         if run_num < bench_cfg["measure_runs"]:
             time.sleep(bench_cfg["inter_run_sleep"])
 
+    # actual_runs 확정 후 전체 행(성공+실패) 일괄 기록
     actual = len(run_results)
     target = bench_cfg["measure_runs"]
+    for row in pending:
+        object.__setattr__(row, "actual_runs", actual)
+        append_result(row, output_path)
 
     if actual < target:
         console.print(
@@ -208,10 +227,6 @@ def run_track(
         )
 
     if run_results:
-        # actual_runs 소급 기록 (CSV는 이미 append됐으므로 in-memory만 갱신)
-        for r in run_results:
-            object.__setattr__(r, "actual_runs", actual) if hasattr(r, "__dataclass_fields__") else None
-
         agg = aggregate_results(run_results)
         hit = f"  hit={agg['hit_rate']:.0%}" if track_type == "generation" else ""
         n_note = f" (n={actual})" if actual < target else ""
