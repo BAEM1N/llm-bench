@@ -90,11 +90,16 @@ def run_track(
     max_tokens = track["max_tokens"]
     input_tokens = track["input_tokens"]
 
-    # 프롬프트 생성
+    # 프롬프트 생성 — 트랙 타입 무관하게 input_tokens로 길이 제어
     if track_type == "prefill":
         prompt = build_prefill_prompt(input_tokens)
     else:
-        prompt = build_generation_prompt(track_id)
+        prompt = build_generation_prompt(input_tokens)
+
+    # Ollama: 트랙별 실제 필요 ctx로 설정 (llama.cpp와 동일 조건)
+    if backend_name == "ollama":
+        needed_ctx = min(input_tokens + max_tokens + 256, gen_cfg["context_window"])
+        backend._context_window = needed_ctx
 
     console.print(f"\n  [dim]{track_id}[/dim]  in≈{input_tokens} out={max_tokens}", end=" ")
 

@@ -21,16 +21,15 @@
 ### Generation Track
 짧은 입력, 출력 길이 고정으로 **순수 generation 속도** 측정.
 
-> ⚠️ config의 `input_tokens: 64`는 CSV 기록용이며, 실제 프롬프트는 `build_generation_prompt(track_id)` 고정 문자열 사용.
-> 실측 입력 길이: gen-512 ≈47 tok, gen-2048 ≈60 tok, gen-4096 ≈69 tok, gen-8192 ≈74 tok.
-> generation TPS에 대한 영향은 미미(출력 512~8192 토큰 대비 입력 <75 토큰).
+config의 `input_tokens` 값이 실제 프롬프트 길이를 제어한다.
+`build_generation_prompt(input_tokens)`가 베이스 텍스트로 길이를 맞추고 꼬리 지시문으로 긴 출력을 유도.
 
-| Track ID | 실측 Input (tok) | Output |
-|----------|-----------------:|-------:|
-| gen-512 | ~47 | 512 |
-| gen-2048 | ~60 | 2,048 |
-| gen-4096 | ~69 | 4,096 |
-| gen-8192 | ~74 | 8,192 |
+| Track ID | Input (tok) | Output |
+|----------|------------:|-------:|
+| gen-512 | 64 | 512 |
+| gen-2048 | 64 | 2,048 |
+| gen-4096 | 64 | 4,096 |
+| gen-8192 | 64 | 8,192 |
 
 ### Prefill Track
 출력 최소(10 tokens), 입력 길이 변화로 **KV cache 채우기 속도** 측정.
@@ -82,7 +81,7 @@
 |--------|----------|
 | MLX | temperature=0, Metal GPU |
 | llama.cpp | n-gpu-layers=99, flash-attn=on, batch=512, ubatch=512, no-mmap |
-| Ollama | temperature=0, num_ctx=262144 |
+| Ollama | temperature=0, num_ctx=트랙별 필요 ctx (input+output+256) |
 | vLLM | temperature=0, max-model-len=262144, tensor-parallel-size=auto |
 
 ---
