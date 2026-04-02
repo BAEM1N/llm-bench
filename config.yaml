@@ -21,7 +21,7 @@ thermal:
 
 hardware:
   id: "macbook-m-series"    # 결과 CSV에 포함 — 하드웨어 비교용
-  description: "Apple Silicon MacBook, 128GB unified memory"
+  description: "MacBook Pro M5 Max, 128GB unified memory"
 
 # ─────────────────────────────────────────
 # Track 1: Generation — 입력 고정(64 tokens), 출력 고정

@@ -1,4 +1,4 @@
-# Setup & Monitoring — Mac Apple Silicon
+# Setup & Monitoring — MacBook Pro M5 Max
 
 ## 1. 환경 설치
 
