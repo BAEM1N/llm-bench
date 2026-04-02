@@ -4,7 +4,7 @@
 
 Qwen3.5 패밀리(9B / 27B / 35B-A3B MoE / 122B-A10B MoE)를 여러 백엔드와 하드웨어에서 벤치마크하는 도구.
 측정 지표: TTFT, Prefill TPS, Generation TPS, Peak Memory, CPU 온도.
-크로스 플랫폼 비교 대상: Apple Silicon MacBook (128GB) → NVIDIA DGX Spark → AMD Ryzen AI 395.
+크로스 플랫폼 비교 대상: Apple Silicon MacBook (128GB) → NVIDIA DGX Spark → AMD Ryzen AI MAX 395+ (HP Z2 Mini G1a, 128GB).
 
 ## 환경 설정 규칙
 
@@ -133,7 +133,7 @@ uv run python -m src.runner --output results/my_run.csv
 |---------|--------|--------|-------------------|
 | Mac (Apple Silicon) | 128GB unified | llama.cpp, LM Studio, Ollama, MLX | `macbook-m-series` |
 | DGX Spark (GB10) | 128GB unified | llama.cpp, vLLM (AWQ) | `dgx-spark` |
-| Ryzen AI 395 | 최대 128GB DDR5 | llama.cpp (ROCm), Ollama (ROCm) | `ryzen-ai-395` |
+| Ryzen AI MAX 395+ (HP Z2 Mini G1a) | 128GB unified (Strix Halo) | llama.cpp (ROCm/Vulkan), Ollama (ROCm), vLLM (ROCm, 실험적) | `ryzen-ai-max-395` |
 
 > 크로스 플랫폼 비교 시 `hardware.id`를 반드시 변경한 후 실행할 것.
 
@@ -170,8 +170,10 @@ uv run python -m src.runner --output results/my_run.csv
 - vLLM AWQ 기본 경로: `/models/vllm` (환경변수 `VLLM_DIR`로 오버라이드 가능)
 - `config.yaml`의 `hardware.id`를 `dgx-spark`로 변경 필수
 
-### Ryzen AI 395 설정
-- llama.cpp는 ROCm 빌드 필요: `cmake -DGGML_HIPBLAS=ON ..`
-- Ollama ROCm 빌드: https://ollama.com/download/linux
-- iGPU 16GB VRAM 기준: 9B Q4/Q8, 27B Q4 GPU 추론 가능 / 나머지 CPU fallback
-- `config.yaml`의 `hardware.id`를 `ryzen-ai-395`로 변경 필수
+### Ryzen AI MAX 395+ 설정 (HP Z2 Mini G1a, 128GB)
+- **아키텍처**: Strix Halo — iGPU (Radeon 8060S, 40 CU, RDNA 3.5) + 128GB 유니파이드 메모리
+- Apple Silicon과 동일 구조: CPU/GPU/NPU가 동일 메모리 풀 공유 → 전 모델 실행 가능
+- llama.cpp: ROCm 빌드 (`cmake -DGGML_HIPBLAS=ON ..`) 또는 Vulkan 빌드 권장
+- Ollama: ROCm 빌드 사용
+- vLLM: ROCm 6.x 이상 필요. Strix Halo iGPU는 공식 tier-1 미지원이나 커뮤니티에서 동작 확인됨
+- `config.yaml`의 `hardware.id`를 `ryzen-ai-max-395`로 변경 필수

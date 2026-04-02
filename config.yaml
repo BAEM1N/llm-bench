@@ -130,9 +130,9 @@ backends:
     tensor_parallel_size: 2   # 3090 2-WAY / DGX Spark. 단일 GPU이면 1.
     gpu_memory_utilization: 0.90
     # KV cache가 VRAM을 많이 차지함 → 플랫폼별 권장값:
-    #   3090 2-WAY (48GB VRAM) : 32768  (32K)
-    #   DGX Spark (128GB unified): 65536 (64K)
-    #   Ryzen AI 395 iGPU (16GB): 16384 (16K)
+    #   3090 2-WAY (48GB VRAM)          : 32768  (32K)
+    #   DGX Spark (128GB unified)       : 65536  (64K)
+    #   Ryzen AI MAX 395+ (128GB unified): 65536 (64K) — Strix Halo, 유니파이드 메모리 (Apple Silicon과 동일 구조)
     max_model_len: 32768
     extra_args: []
 
