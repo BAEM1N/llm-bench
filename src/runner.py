@@ -301,6 +301,11 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
                 # 전 백엔드 동일 full context (공정 비교)
                 load_ctx = gen_cfg["context_window"]
 
+                # vLLM: quantization type을 quant_cfg에서 per-model 재설정
+                # (Q4_K_M → AWQ, Q8_0 → BF16/None, GGUF 직접 로드 시 "gguf")
+                if backend_name == "vllm" and "vllm_quantization" in quant_cfg:
+                    backend.quantization = quant_cfg.get("vllm_quantization")
+
                 # 모델 로드
                 try:
                     with Progress(SpinnerColumn(), TextColumn("모델 로드 중..."), TimeElapsedColumn(), transient=True) as p:
@@ -390,8 +395,8 @@ def main():
     parser = argparse.ArgumentParser(description="LLM Benchmark — Generation + Prefill")
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--output", default=None)
-    parser.add_argument("--backends", nargs="+",
-                        default=["ollama", "llamacpp", "mlx"])
+    parser.add_argument("--backends", nargs="+", default=None,
+                        help="실행할 백엔드 목록. 미지정 시 config의 enabled 백엔드 전체.")
     parser.add_argument("--models", nargs="+", default=[])
     parser.add_argument("--tracks", nargs="+", default=[],
                         help="특정 track만 실행 (e.g. gen-512 prefill-4k)")
@@ -416,7 +421,12 @@ def main():
     console.print(f"Prefill tracks:    {[t['id'] for t in config['prefill_tracks']]}")
     console.print(f"Thermal guard: {config.get('thermal', {}).get('enabled', False)}\n")
 
-    run_benchmark(config, args.backends, args.models, output_path)
+    # --backends 미지정 시 config에서 enabled 백엔드 자동 수집
+    backends = args.backends or [
+        name for name, cfg in config.get("backends", {}).items()
+        if cfg.get("enabled", True)
+    ]
+    run_benchmark(config, backends, args.models, output_path)
 
 
 if __name__ == "__main__":

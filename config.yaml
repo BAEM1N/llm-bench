@@ -98,6 +98,7 @@ concurrency_benchmark:
     latency_p95_s_long: 180
 
 backends:
+  # ── Mac (Apple Silicon) ───────────────────────────────────────────────────
   ollama:
     enabled: true
     base_url: "http://localhost:11434"
@@ -109,7 +110,7 @@ backends:
     base_url: "http://localhost:8080"
     binary: "llama-server"
     n_gpu_layers: 99      # -1 = CPU only, 99 = all layers to GPU
-    flash_attn: true      # --flash-attn: prefill 속도 향상 (Metal 지원)
+    flash_attn: true      # --flash-attn: prefill 속도 향상 (Metal/CUDA 지원)
     batch_size: 512       # --batch-size: prefill 배치 크기
     ubatch_size: 512      # --ubatch-size: 마이크로 배치 크기
     threads: null         # --threads: null = llama.cpp 자동 결정
@@ -117,7 +118,23 @@ backends:
     mlock: false          # --mlock: 모델을 RAM에 고정 (swap 방지)
     extra_args: []        # 추가 raw 플래그 (e.g. ["--numa", "numactl"])
   mlx:
-    enabled: true
+    enabled: true         # macOS 전용. Linux/Windows에서는 false로 설정.
+
+  # ── NVIDIA GPU (3090 2-WAY / DGX Spark) ───────────────────────────────────
+  # 실행: `vllm serve <model_id> --tensor-parallel-size 2 ...`
+  # 사전 조건: pip install vllm (CUDA 빌드)
+  vllm:
+    enabled: false        # NVIDIA 환경에서만 true로 변경
+    base_url: "http://localhost:8000"
+    binary: "vllm"
+    tensor_parallel_size: 2   # 3090 2-WAY / DGX Spark. 단일 GPU이면 1.
+    gpu_memory_utilization: 0.90
+    # KV cache가 VRAM을 많이 차지함 → 플랫폼별 권장값:
+    #   3090 2-WAY (48GB VRAM) : 32768  (32K)
+    #   DGX Spark (128GB unified): 65536 (64K)
+    #   Ryzen AI 395 iGPU (16GB): 16384 (16K)
+    max_model_len: 32768
+    extra_args: []
 
 models:
   - id: "qwen3.5-9b"
@@ -131,11 +148,18 @@ models:
         lmstudio_model: "qwen3.5-9b@q4_k_m"
         ollama_model: "qwen3.5:9b-q4_K_M"
         mlx_model: "~/.cache/mlx/Qwen3.5-9B-4bit"
+        # vllm: HF AWQ 모델 사용. 없으면 vllm_model을 gguf_path로, vllm_quantization을 "gguf"로 변경.
+        # HF ID 확인: https://huggingface.co/Qwen
+        vllm_model: "Qwen/Qwen3.5-9B-Instruct-AWQ"
+        vllm_quantization: "awq"
       - name: "Q8_0"
         gguf_path: "~/.lmstudio/models/unsloth/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q8_0.gguf"
         lmstudio_model: "qwen3.5-9b@q8_0"
         ollama_model: "qwen3.5:9b-q8_0"
         mlx_model: "~/.cache/mlx/Qwen3.5-9B-8bit"
+        # BF16: 단일 3090 (24GB)에서 실행 가능 (~18GB). tensor_parallel_size: 1 권장.
+        vllm_model: "Qwen/Qwen3.5-9B-Instruct"
+        vllm_quantization: null
 
   - id: "qwen3.5-27b"
     architecture: "dense"
@@ -148,11 +172,16 @@ models:
         lmstudio_model: "qwen3.5-27b@q4_k_m"
         ollama_model: "qwen3.5:27b-q4_K_M"
         mlx_model: "~/.cache/mlx/Qwen3.5-27B-4bit"
+        vllm_model: "Qwen/Qwen3.5-27B-Instruct-AWQ"
+        vllm_quantization: "awq"
       - name: "Q8_0"
         gguf_path: "~/.lmstudio/models/unsloth/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf"
         lmstudio_model: "qwen3.5-27b@q8_0"
         ollama_model: "qwen3.5:27b-q8_0"
         mlx_model: "~/.cache/mlx/Qwen3.5-27B-8bit"
+        # BF16 ~55GB → 3090 2-WAY (48GB) 초과. DGX Spark (128GB)에서만 실행.
+        vllm_model: "Qwen/Qwen3.5-27B-Instruct"
+        vllm_quantization: null
 
   - id: "qwen3.5-35b-a3b"
     architecture: "moe"
@@ -165,11 +194,17 @@ models:
         lmstudio_model: "qwen/qwen3.5-35b-a3b"
         ollama_model: "qwen3.5:35b-a3b-q4_K_M"
         mlx_model: "~/.cache/mlx/Qwen3.5-35B-A3B-4bit"
+        # MoE: total weights ~20GB → 단일 3090 (24GB)에서도 실행 가능
+        vllm_model: "Qwen/Qwen3.5-35B-A3B-Instruct-AWQ"
+        vllm_quantization: "awq"
       - name: "Q8_0"
         gguf_path: "~/.lmstudio/models/unsloth/Qwen3.5-35B-A3B-GGUF/Qwen3.5-35B-A3B-Q8_0.gguf"
         lmstudio_model: "qwen/qwen3.5-35b-a3b"
         ollama_model: "qwen3.5:35b-a3b-q8_0"
         mlx_model: "~/.cache/mlx/Qwen3.5-35B-A3B-8bit"
+        # BF16 ~70GB → 3090 2-WAY (48GB) 초과. DGX Spark에서만.
+        vllm_model: "Qwen/Qwen3.5-35B-A3B-Instruct"
+        vllm_quantization: null
 
   - id: "qwen3.5-122b-a10b"
     architecture: "moe"
@@ -182,3 +217,6 @@ models:
         lmstudio_model: "qwen3.5-122b-a10b"
         ollama_model: "qwen3.5:122b-a10b-q4_K_M"
         mlx_model: "~/.cache/mlx/Qwen3.5-122B-A10B-4bit"
+        # ~65GB → 3090 2-WAY (48GB) 초과. DGX Spark (128GB)에서만 실행 가능.
+        vllm_model: "Qwen/Qwen3.5-122B-A10B-Instruct-AWQ"
+        vllm_quantization: "awq"

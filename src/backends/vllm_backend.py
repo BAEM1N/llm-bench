@@ -1,13 +1,19 @@
-"""vLLM backend — DGX Spark (CUDA) / Ryzen AI 395 (ROCm) 용.
+"""vLLM backend — NVIDIA CUDA (3090 2-WAY / DGX Spark) / AMD ROCm (Ryzen AI 395) 용.
 
 vLLM 서버를 서브프로세스로 실행하거나 외부에서 미리 실행된 서버에 연결.
-AWQ / GPTQ 양자화 지원.
+AWQ / GPTQ / GGUF 양자화 지원.
 
-TODO: 실험 환경 세팅 후 구현 완료
+GGUF 사용 시: vllm_model = GGUF 파일 경로, vllm_quantization = "gguf"
+  → --load-format gguf 자동 추가. 별도 HF 다운로드 불필요.
+  단, GGUF + tensor-parallel 조합은 vLLM에서 미지원 → tensor_parallel_size=1 필요.
+
+AWQ 사용 시: vllm_model = HF 모델 ID (e.g. Qwen/Qwen3.5-9B-Instruct-AWQ)
+  → HF에서 다운로드 필요. tensor-parallel 지원.
 """
 import json
 import time
 import subprocess
+from urllib.parse import urlparse
 import httpx
 from typing import Optional
 
@@ -55,16 +61,23 @@ class VLLMBackend(BaseBackend):
         self._model_id = model_id
         self._context_window = context_window
 
+        parsed = urlparse(self.base_url)
+        host = parsed.hostname or "127.0.0.1"
+        port = str(parsed.port or 8000)
+
         cmd = [
             self.binary, "serve", model_id,
-            "--port", "8000",
-            "--host", "127.0.0.1",
+            "--port", port,
+            "--host", host,
             "--tensor-parallel-size", str(self.tensor_parallel_size),
             "--gpu-memory-utilization", str(self.gpu_memory_utilization),
             "--max-model-len", str(self.max_model_len or context_window),
             "--disable-log-requests",
         ]
-        if self.quantization:
+        if self.quantization == "gguf":
+            # GGUF 파일 직접 로드. tensor-parallel은 미지원 → tensor_parallel_size=1 권장.
+            cmd += ["--load-format", "gguf"]
+        elif self.quantization:
             cmd += ["--quantization", self.quantization]
         if self.extra_args:
             cmd.extend(self.extra_args)
