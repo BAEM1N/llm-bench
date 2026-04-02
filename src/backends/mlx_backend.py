@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 
 from .base import BaseBackend, GenerateResult
 
@@ -21,10 +22,19 @@ class MLXBackend(BaseBackend):
             return "not installed"
 
     def load_model(self, model_id: str, gguf_path: str, context_window: int) -> None:
+        import mlx.core as mx
         from mlx_lm import load
-        self._model_path = model_id  # MLX는 HuggingFace model ID 사용
+        expanded = str(Path(model_id).expanduser())
+        model_ref = expanded if Path(expanded).exists() else model_id
+        self._model_path = model_ref
         self._context_window = context_window
-        self._model, self._tokenizer = load(model_id)
+        mx.metal.reset_peak_memory()
+        self._model, self._tokenizer = load(model_ref)
+        # load() 완료 후 Metal peak = 모델 가중치 메모리
+        self._model_memory_gb = round(mx.metal.get_peak_memory() / 1024**3, 2)
+
+    def get_model_memory_gb(self) -> float:
+        return getattr(self, "_model_memory_gb", 0.0)
 
     def unload_model(self) -> None:
         self._model = None
@@ -45,40 +55,34 @@ class MLXBackend(BaseBackend):
         repeat_penalty: float = 1.0,
     ) -> GenerateResult:
         from mlx_lm import stream_generate
+        from mlx_lm.sample_utils import make_sampler
+
+        sampler = make_sampler(temp=temperature, top_p=top_p if top_p < 1.0 else 0.0)
 
         t_start = time.perf_counter()
         t_first = None
-        output_tokens = 0
-        prompt_tokens = 0
+        last_resp = None
 
-        # 프롬프트 토큰 수 사전 계산
-        if self._tokenizer:
-            encoded = self._tokenizer.encode(prompt)
-            prompt_tokens = len(encoded) if isinstance(encoded, list) else encoded.shape[0]
-
-        for token in stream_generate(
+        for resp in stream_generate(
             self._model,
             self._tokenizer,
             prompt=prompt,
             max_tokens=max_tokens,
-            temp=temperature,
-            top_p=top_p,
-            repetition_penalty=repeat_penalty,
+            sampler=sampler,
         ):
             if t_first is None:
                 t_first = time.perf_counter()
-            output_tokens += 1
+            last_resp = resp
 
         t_end = time.perf_counter()
         t_first = t_first or t_end
 
         ttft_ms = (t_first - t_start) * 1000
         total_latency_s = t_end - t_start
-        gen_duration = t_end - t_first
 
-        gen_tps = output_tokens / gen_duration if gen_duration > 0 else 0.0
-        prompt_duration = (t_first - t_start)
-        prompt_tps = prompt_tokens / prompt_duration if prompt_duration > 0 else 0.0
+        gen_tps = last_resp.generation_tps if last_resp else 0.0
+        prompt_tps = last_resp.prompt_tps if last_resp else 0.0
+        output_tokens = last_resp.generation_tokens if last_resp else 0
 
         return GenerateResult(
             ttft_ms=round(ttft_ms, 2),

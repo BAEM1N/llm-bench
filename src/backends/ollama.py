@@ -30,8 +30,29 @@ class OllamaBackend(BaseBackend):
         """Ollama는 pull로 미리 받아두고, API 호출 시 모델명으로 지정."""
         self._model_id = model_id
         self._context_window = context_window
-        # 모델 로드 워밍업 (첫 로드 시 메모리 올라옴)
+        rss_before = self._ollama_rss_gb()
         self._ping_model()
+        rss_after = self._ollama_rss_gb()
+        delta = rss_after - rss_before
+        self._model_memory_gb = round(max(delta, rss_after), 2)
+
+    def _ollama_rss_gb(self) -> float:
+        """Ollama 서버 프로세스 RSS (GB)."""
+        try:
+            out = subprocess.check_output(
+                ["pgrep", "-n", "ollama"], text=True, stderr=subprocess.DEVNULL
+            )
+            pid = int(out.strip())
+            rss_out = subprocess.check_output(
+                ["ps", "-o", "rss=", "-p", str(pid)],
+                text=True, stderr=subprocess.DEVNULL,
+            )
+            return round(int(rss_out.strip()) / 1024 / 1024, 2)
+        except Exception:
+            return 0.0
+
+    def get_model_memory_gb(self) -> float:
+        return getattr(self, "_model_memory_gb", 0.0)
 
     def unload_model(self) -> None:
         # Ollama는 자동 메모리 관리, 명시적 언로드는 불필요

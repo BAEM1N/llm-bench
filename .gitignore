@@ -15,6 +15,14 @@ results/*.csv
 # Charts
 charts/
 
+# Logs (run outputs) — keep directory, ignore contents
+logs/*
+!logs/.gitkeep
+
 # Temp
 *.log
 nohup.out
+
+# Local tooling state
+.omx/
+.claude/

@@ -10,13 +10,13 @@ from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from .metrics import BenchmarkResult, append_result, median_result
-from .memory import MemoryMonitor
 from .thermal import wait_for_cooldown, log_temp
 from .prompt_gen import build_prefill_prompt, build_generation_prompt
 from .backends.ollama import OllamaBackend
 from .backends.lmstudio import LMStudioBackend
 from .backends.llamacpp import LlamaCppBackend
 from .backends.mlx_backend import MLXBackend
+from .backends.vllm_backend import VLLMBackend
 
 console = Console()
 
@@ -46,6 +46,16 @@ def make_backend(name: str, cfg: dict):
         )
     if name == "mlx":
         return MLXBackend()
+    if name == "vllm":
+        return VLLMBackend(
+            base_url=cfg.get("base_url", "http://localhost:8000"),
+            binary=cfg.get("binary", "vllm"),
+            tensor_parallel_size=cfg.get("tensor_parallel_size", 1),
+            gpu_memory_utilization=cfg.get("gpu_memory_utilization", 0.90),
+            max_model_len=cfg.get("max_model_len"),
+            quantization=cfg.get("quantization"),
+            extra_args=cfg.get("extra_args", []),
+        )
     raise ValueError(f"Unknown backend: {name}")
 
 
@@ -73,6 +83,7 @@ def run_track(
     gen_cfg: dict,
     hardware_id: str,
     output_path: Path,
+    model_memory_gb: float = 0.0,
 ) -> list[BenchmarkResult]:
 
     track_id = track["id"]
@@ -108,17 +119,12 @@ def run_track(
             )
 
         temp_info = log_temp()
-        monitor = MemoryMonitor()
-        monitor.start()
 
         try:
             result = run_one(backend, prompt, max_tokens, gen_cfg)
         except Exception as e:
             console.print(f"[red]Run {run_num} 실패: {e}[/red]")
-            monitor.stop()
             continue
-        finally:
-            peak_mem = monitor.stop()
 
         # prefill_tps = prompt_tokens / TTFT
         prefill_tps = (input_tokens / (result.ttft_ms / 1000)) if result.ttft_ms > 0 else 0.0
@@ -143,7 +149,7 @@ def run_track(
             gen_tps=result.gen_tps,
             total_latency_s=result.total_latency_s,
             output_tokens=result.output_tokens,
-            peak_memory_gb=peak_mem,
+            peak_memory_gb=model_memory_gb,
             cpu_temp_celsius=temp_info.get("cpu_temp_celsius") or -1,
             context_window=gen_cfg["context_window"],
         )
@@ -207,19 +213,38 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
                     model_ref = quant_cfg["ollama_model"]
                 elif backend_name == "lmstudio":
                     model_ref = quant_cfg["lmstudio_model"]
+                elif backend_name == "vllm":
+                    model_ref = quant_cfg.get("vllm_model") or quant_cfg.get("gguf_path", "")
+                    if not model_ref:
+                        console.print(f"[yellow]Skip vLLM: {model_cfg['id']} {quant_cfg['name']} (vllm_model 미설정)[/yellow]")
+                        continue
                 else:
                     model_ref = quant_cfg["gguf_path"]
 
                 console.print(f"\n[bold]{model_cfg['id']}[/bold] [{quant_cfg['name']}]")
 
+                # llama.cpp: 실행할 트랙 기준 최소 ctx 계산 (KV cache 절약)
+                if backend_name == "llamacpp":
+                    needed = max(
+                        (t["input_tokens"] + t["max_tokens"] for t in gen_tracks + prefill_tracks),
+                        default=gen_cfg["context_window"],
+                    ) + 256
+                    load_ctx = min(needed, gen_cfg["context_window"])
+                else:
+                    load_ctx = gen_cfg["context_window"]
+
                 # 모델 로드
                 try:
                     with Progress(SpinnerColumn(), TextColumn("모델 로드 중..."), TimeElapsedColumn(), transient=True) as p:
                         p.add_task("")
-                        backend.load_model(model_ref, quant_cfg["gguf_path"], gen_cfg["context_window"])
+                        backend.load_model(model_ref, quant_cfg["gguf_path"], load_ctx)
                 except Exception as e:
                     console.print(f"[red]로드 실패: {e}[/red]")
                     continue
+
+                model_memory_gb = backend.get_model_memory_gb()
+                if model_memory_gb > 0:
+                    console.print(f"  [dim]모델 메모리: {model_memory_gb:.2f} GB[/dim]")
 
                 # Generation tracks
                 console.print("  [bold yellow]── Generation ──[/bold yellow]")
@@ -228,7 +253,7 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
                         backend, backend_name, model_cfg, quant_cfg,
                         track, "generation",
                         bench_cfg, thermal_cfg, gen_cfg,
-                        hardware_id, output_path,
+                        hardware_id, output_path, model_memory_gb,
                     )
                     all_results.extend(results)
                     time.sleep(bench_cfg["inter_track_sleep"])
@@ -240,7 +265,7 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
                         backend, backend_name, model_cfg, quant_cfg,
                         track, "prefill",
                         bench_cfg, thermal_cfg, gen_cfg,
-                        hardware_id, output_path,
+                        hardware_id, output_path, model_memory_gb,
                     )
                     all_results.extend(results)
                     time.sleep(bench_cfg["inter_track_sleep"])
@@ -290,7 +315,7 @@ def main():
     parser.add_argument("--config", default="config.yaml")
     parser.add_argument("--output", default=None)
     parser.add_argument("--backends", nargs="+",
-                        default=["ollama", "lmstudio", "llamacpp", "mlx"])
+                        default=["ollama", "lmstudio", "llamacpp", "mlx", "vllm"])
     parser.add_argument("--models", nargs="+", default=[])
     parser.add_argument("--tracks", nargs="+", default=[],
                         help="특정 track만 실행 (e.g. gen-512 prefill-4k)")

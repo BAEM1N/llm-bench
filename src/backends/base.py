@@ -35,6 +35,10 @@ class BaseBackend(ABC):
     ) -> GenerateResult:
         """추론 실행 및 타이밍 측정."""
 
+    def get_model_memory_gb(self) -> float:
+        """모델 로드 후 점유 메모리 반환 (GB). 측정 불가 시 0.0."""
+        return 0.0
+
     @abstractmethod
     def get_version(self) -> str:
         """백엔드 버전 반환."""

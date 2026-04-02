@@ -7,7 +7,7 @@ from typing import Optional
 
 from .base import BaseBackend, GenerateResult
 
-STARTUP_TIMEOUT = 120  # seconds
+STARTUP_TIMEOUT = 300  # seconds
 
 
 class LlamaCppBackend(BaseBackend):
@@ -69,7 +69,7 @@ class LlamaCppBackend(BaseBackend):
             "--log-disable",
         ]
         if self.flash_attn:
-            cmd.append("--flash-attn")
+            cmd.extend(["--flash-attn", "on"])
         if self.batch_size is not None:
             cmd += ["--batch-size", str(self.batch_size)]
         if self.ubatch_size is not None:
@@ -95,12 +95,28 @@ class LlamaCppBackend(BaseBackend):
             try:
                 r = httpx.get(f"{self.base_url}/health", timeout=3)
                 if r.status_code == 200:
+                    self._model_memory_gb = self._read_proc_rss_gb()
                     return
             except Exception:
                 pass
             time.sleep(1)
 
         raise RuntimeError(f"llama-server did not start within {STARTUP_TIMEOUT}s")
+
+    def _read_proc_rss_gb(self) -> float:
+        """llama-server 프로세스 RSS (GB)."""
+        try:
+            out = subprocess.check_output(
+                ["ps", "-o", "rss=", "-p", str(self._proc.pid)],
+                text=True, stderr=subprocess.DEVNULL,
+            )
+            rss_kb = int(out.strip())
+            return round(rss_kb / 1024 / 1024, 2)
+        except Exception:
+            return 0.0
+
+    def get_model_memory_gb(self) -> float:
+        return getattr(self, "_model_memory_gb", 0.0)
 
     def unload_model(self) -> None:
         if self._proc:
@@ -130,25 +146,31 @@ class LlamaCppBackend(BaseBackend):
 
         t_start = time.perf_counter()
         t_first = None
+        token_count = 0
         output_tokens = 0
         timings = {}
 
         with httpx.Client(timeout=300) as client:
             with client.stream("POST", f"{self.base_url}/completion", json=payload) as resp:
                 for line in resp.iter_lines():
-                    if not line or not line.startswith("data: "):
+                    if not line:
                         continue
+                    raw = line[6:] if line.startswith("data: ") else line
                     try:
-                        chunk = json.loads(line[6:])
+                        chunk = json.loads(raw)
                     except json.JSONDecodeError:
                         continue
 
-                    if chunk.get("content") and t_first is None:
-                        t_first = time.perf_counter()
+                    content = chunk.get("content", "")
+                    if content:
+                        if t_first is None:
+                            t_first = time.perf_counter()
+                        token_count += 1  # 청크당 1토큰 (llama.cpp 기본)
 
-                    if chunk.get("stop"):
+                    if chunk.get("stop") is True:
                         timings = chunk.get("timings", {})
-                        output_tokens = chunk.get("tokens_predicted", 0)
+                        # tokens_predicted가 있으면 사용, 없으면 카운트 사용
+                        output_tokens = chunk.get("tokens_predicted") or token_count
                         break
 
         t_end = time.perf_counter()

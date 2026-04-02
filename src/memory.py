@@ -40,7 +40,10 @@ class MemoryMonitor:
             for line in out.splitlines():
                 if ":" in line:
                     key, _, val = line.partition(":")
-                    stats[key.strip()] = int(val.strip().rstrip("."))
+                    try:
+                        stats[key.strip()] = int(val.strip().rstrip("."))
+                    except ValueError:
+                        pass
 
             page = 16384  # macOS page size bytes
             used_pages = (
