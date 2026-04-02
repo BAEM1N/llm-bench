@@ -97,9 +97,65 @@ def _linux_sysfs_temp() -> Optional[float]:
     return None
 
 
+def _linux_hwmon_temp() -> Optional[float]:
+    """hwmon 드라이버에서 CPU 온도 직접 읽기.
+
+    우선순위: k10temp (AMD Ryzen) → coretemp (Intel) → 첫 번째 hwmon temp
+    lm-sensors 미설치 환경에서도 동작.
+    """
+    preferred = ("k10temp", "coretemp")
+    fallback_hwmon = None
+
+    for hwmon_dir in sorted(glob.glob("/sys/class/hwmon/hwmon*")):
+        try:
+            name_path = f"{hwmon_dir}/name"
+            with open(name_path) as f:
+                name = f.read().strip()
+        except Exception:
+            continue
+
+        is_preferred = name in preferred
+        if not is_preferred and fallback_hwmon is None:
+            fallback_hwmon = hwmon_dir
+
+        if is_preferred:
+            # Tctl (AMD) 또는 Package id 0 (Intel) 우선
+            for label_file in sorted(glob.glob(f"{hwmon_dir}/temp*_label")):
+                try:
+                    with open(label_file) as f:
+                        label = f.read().strip()
+                    if any(k in label for k in ("Tctl", "Package", "Tccd1")):
+                        input_file = label_file.replace("_label", "_input")
+                        with open(input_file) as f:
+                            return int(f.read().strip()) / 1000.0
+                except Exception:
+                    continue
+            # label 없으면 temp1_input (보통 Tctl)
+            try:
+                with open(f"{hwmon_dir}/temp1_input") as f:
+                    return int(f.read().strip()) / 1000.0
+            except Exception:
+                continue
+
+    # 최후 fallback: 아무 hwmon의 temp1
+    if fallback_hwmon:
+        try:
+            with open(f"{fallback_hwmon}/temp1_input") as f:
+                return int(f.read().strip()) / 1000.0
+        except Exception:
+            pass
+    return None
+
+
 def _linux_temp() -> Optional[float]:
+    # 우선순위: sensors -j → hwmon 직접 읽기 → sysfs thermal_zone
     temp = _linux_sensors_temp()
-    return temp if temp is not None else _linux_sysfs_temp()
+    if temp is not None:
+        return temp
+    temp = _linux_hwmon_temp()
+    if temp is not None:
+        return temp
+    return _linux_sysfs_temp()
 
 
 # ─── Public API ─────────────────────────────────────────────────────────────
