@@ -172,13 +172,27 @@ uv run python -m src.runner --output results/my_run.csv
 - `config.yaml`의 `hardware.id`를 `dgx-spark`로 변경 필수
 
 ### Ryzen 9 5950X + RTX 3090 × 2 설정 (Linux)
-- **아키텍처**: 별도 VRAM 24GB × 2 = 48GB. CPU RAM 128GB DDR4 (GPU offload 가능)
-- 가능 모델 (GPU only): 9B AWQ ✅, 27B AWQ ✅, 35B-A3B AWQ ✅, 122B AWQ ❌ (65GB > 48GB)
-- 122B는 CPU offload (llama.cpp `--n-gpu-layers` 조정) 또는 DGX Spark에서 실행
+- **아키텍처**: 별도 VRAM 24GB × 2 = 48GB. CPU RAM 128GB DDR4
 - llama.cpp: CUDA 빌드 (`cmake -DGGML_CUDA=ON ..`)
 - vLLM: `tensor_parallel_size: 2`, `max_model_len: 32768` (KV cache 제약)
 - MLX: 불가 (macOS 전용)
 - `config.yaml`의 `hardware.id`를 `linux-5950x-3090x2`로 변경 필수
+
+**모델별 실행 전략 (llama.cpp):**
+
+| 모델 | VRAM 점유 | n_gpu_layers | 비고 |
+|------|-----------|-------------|------|
+| 9B Q4_K_M | ~5GB | 99 | 단일 GPU |
+| 9B Q8_0 | ~9.5GB | 99 | 단일 GPU |
+| 27B Q4_K_M | ~15GB | 99 | 단일 GPU |
+| 27B Q8_0 | ~28GB | 99 | 양쪽 분산 |
+| 35B-A3B Q4_K_M | ~20GB | 99 | 단일 GPU |
+| 35B-A3B Q8_0 | ~37GB | 99 | 양쪽 분산 |
+| 122B-A10B Q4_K_M | ~65GB | **60** | ~43GB GPU + ~22GB RAM 오프로드 |
+
+- **122B 실행 시**: `config.yaml`의 `llamacpp.n_gpu_layers`를 **60**으로 변경 후 실행
+- 오프로드 레이어는 CPU(5950X 16코어)에서 실행 → gen TPS 저하 예상
+- 122B Q8_0 (~125GB): VRAM+RAM 합산(176GB)엔 들어가나 gen TPS 매우 낮을 것
 
 ### Ryzen AI MAX 395+ 설정 (HP Z2 Mini G1a, 128GB)
 - **아키텍처**: Strix Halo — iGPU (Radeon 8060S, 40 CU, RDNA 3.5) + 128GB 유니파이드 메모리

@@ -109,6 +109,13 @@ backends:
     enabled: true
     base_url: "http://localhost:8080"
     binary: "llama-server"
+    # n_gpu_layers 플랫폼별 권장값:
+    #   Mac M5 Max (128GB unified)       : 99  (전 레이어 GPU)
+    #   DGX Spark (128GB unified)        : 99  (전 레이어 GPU)
+    #   Ryzen AI MAX 395+ (128GB unified): 99  (전 레이어 GPU)
+    #   linux-5950x-3090x2 — 9B/27B/35B : 99  (48GB VRAM에 전부 들어감)
+    #   linux-5950x-3090x2 — 122B Q4_K_M: 60  (≈65GB 중 ~43GB GPU, 나머지 RAM 오프로드)
+    #     → 122B 실행 시 이 값을 60으로 변경 후 실행할 것
     n_gpu_layers: 99      # -1 = CPU only, 99 = all layers to GPU
     flash_attn: true      # --flash-attn: prefill 속도 향상 (Metal/CUDA 지원)
     batch_size: 512       # --batch-size: prefill 배치 크기
