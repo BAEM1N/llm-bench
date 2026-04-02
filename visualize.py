@@ -186,10 +186,196 @@ def chart_heatmap(df: pd.DataFrame, out: Path) -> None:
     plt.close(fig)
 
 
+def load_concurrent_summary(csv_path: Path) -> pd.DataFrame:
+    """concurrent_runner 출력 summary CSV 로드."""
+    return pd.read_csv(csv_path)
+
+
+def chart_concurrency_agg_tps(df: pd.DataFrame, out: Path) -> None:
+    """동시성별 Aggregate TPS (track별 서브플롯)."""
+    tracks = sorted(df["track_id"].unique())
+    n = len(tracks)
+    if n == 0:
+        return
+    fig, axes = plt.subplots(1, n, figsize=(5 * n, 6), sharey=False)
+    if n == 1:
+        axes = [axes]
+    for ax, track_id in zip(axes, tracks):
+        sub = df[df["track_id"] == track_id].sort_values("concurrency")
+        backends = sub["backend"].unique()
+        for backend in backends:
+            bsub = sub[sub["backend"] == backend]
+            ax.plot(bsub["concurrency"], bsub["agg_gen_tps_p50"],
+                    marker="o", label=BACKEND_LABELS.get(backend, backend))
+        ax.set_title(f"Aggregate TPS — {track_id}")
+        ax.set_xlabel("Concurrency")
+        ax.set_ylabel("tok/s (sum, p50)")
+        ax.legend(title="backend")
+    fig.tight_layout()
+    fig.savefig(out / "c01_agg_tps.png", dpi=150)
+    plt.close(fig)
+
+
+def chart_concurrency_p95_latency(df: pd.DataFrame, out: Path) -> None:
+    """동시성별 p95 E2E Latency."""
+    tracks = sorted(df["track_id"].unique())
+    n = len(tracks)
+    if n == 0:
+        return
+    fig, axes = plt.subplots(1, n, figsize=(5 * n, 6), sharey=False)
+    if n == 1:
+        axes = [axes]
+    for ax, track_id in zip(axes, tracks):
+        sub = df[df["track_id"] == track_id].sort_values("concurrency")
+        for backend in sub["backend"].unique():
+            bsub = sub[sub["backend"] == backend]
+            ax.plot(bsub["concurrency"], bsub["latency_p95_s"],
+                    marker="o", label=BACKEND_LABELS.get(backend, backend))
+        ax.set_title(f"p95 Latency — {track_id}")
+        ax.set_xlabel("Concurrency")
+        ax.set_ylabel("seconds (p95)")
+        ax.legend(title="backend")
+    fig.tight_layout()
+    fig.savefig(out / "c02_p95_latency.png", dpi=150)
+    plt.close(fig)
+
+
+def chart_concurrency_p95_ttft(df: pd.DataFrame, out: Path) -> None:
+    """동시성별 p95 TTFT."""
+    tracks = sorted(df["track_id"].unique())
+    n = len(tracks)
+    if n == 0:
+        return
+    fig, axes = plt.subplots(1, n, figsize=(5 * n, 6), sharey=False)
+    if n == 1:
+        axes = [axes]
+    for ax, track_id in zip(axes, tracks):
+        sub = df[df["track_id"] == track_id].sort_values("concurrency")
+        for backend in sub["backend"].unique():
+            bsub = sub[sub["backend"] == backend]
+            ax.plot(bsub["concurrency"], bsub["ttft_p95_ms"],
+                    marker="o", label=BACKEND_LABELS.get(backend, backend))
+        ax.set_title(f"p95 TTFT — {track_id}")
+        ax.set_xlabel("Concurrency")
+        ax.set_ylabel("ms (p95)")
+        ax.legend(title="backend")
+    fig.tight_layout()
+    fig.savefig(out / "c03_p95_ttft.png", dpi=150)
+    plt.close(fig)
+
+
+def chart_concurrency_success_rate(df: pd.DataFrame, out: Path) -> None:
+    """동시성별 Success Rate."""
+    tracks = sorted(df["track_id"].unique())
+    n = len(tracks)
+    if n == 0:
+        return
+    fig, axes = plt.subplots(1, n, figsize=(5 * n, 6), sharey=False)
+    if n == 1:
+        axes = [axes]
+    for ax, track_id in zip(axes, tracks):
+        sub = df[df["track_id"] == track_id].sort_values("concurrency")
+        for backend in sub["backend"].unique():
+            bsub = sub[sub["backend"] == backend]
+            ax.plot(bsub["concurrency"], bsub["success_rate"],
+                    marker="o", label=BACKEND_LABELS.get(backend, backend))
+        ax.axhline(0.99, color="red", linestyle="--", linewidth=1, label="SLA 99%")
+        ax.set_ylim(0, 1.05)
+        ax.set_title(f"Success Rate — {track_id}")
+        ax.set_xlabel("Concurrency")
+        ax.set_ylabel("Success Rate")
+        ax.legend(title="backend")
+    fig.tight_layout()
+    fig.savefig(out / "c04_success_rate.png", dpi=150)
+    plt.close(fig)
+
+
+def chart_concurrency_scaling_efficiency(df: pd.DataFrame, out: Path) -> None:
+    """동시성 스케일링 효율 (Aggregate TPS / concurrency / baseline TPS@1).
+
+    값이 1.0이면 완벽한 선형 스케일링, <1이면 열화.
+    """
+    tracks = sorted(df["track_id"].unique())
+    n = len(tracks)
+    if n == 0:
+        return
+    fig, axes = plt.subplots(1, n, figsize=(5 * n, 6), sharey=True)
+    if n == 1:
+        axes = [axes]
+    for ax, track_id in zip(axes, tracks):
+        sub = df[df["track_id"] == track_id].sort_values("concurrency")
+        for backend in sub["backend"].unique():
+            bsub = sub[sub["backend"] == backend]
+            baseline = bsub[bsub["concurrency"] == 1]["agg_gen_tps_p50"]
+            if baseline.empty:
+                continue
+            base_val = baseline.iloc[0]
+            if base_val == 0:
+                continue
+            eff = bsub["agg_gen_tps_p50"] / (bsub["concurrency"] * base_val)
+            ax.plot(bsub["concurrency"], eff,
+                    marker="o", label=BACKEND_LABELS.get(backend, backend))
+        ax.axhline(1.0, color="green", linestyle="--", linewidth=1, label="Ideal")
+        ax.set_title(f"Scaling Efficiency — {track_id}")
+        ax.set_xlabel("Concurrency")
+        ax.set_ylabel("Efficiency (1.0 = ideal)")
+        ax.legend(title="backend")
+    fig.tight_layout()
+    fig.savefig(out / "c05_scaling_efficiency.png", dpi=150)
+    plt.close(fig)
+
+
+def chart_concurrency_online_users(df: pd.DataFrame, out: Path) -> None:
+    """SLA 통과 최대 동시성 기준 환산 온라인 사용자 수 (T_user=15/30/60s)."""
+    # SLA 통과 최대 동시성 (success_rate >= 0.99)
+    sla_passed = df[df["success_rate"] >= 0.99]
+    if sla_passed.empty:
+        return
+
+    records = []
+    for (backend, track_id), g in sla_passed.groupby(["backend", "track_id"]):
+        max_cc = g["concurrency"].max()
+        avg_gen_s = g[g["concurrency"] == max_cc]["avg_gen_time_s"]
+        if avg_gen_s.empty:
+            continue
+        t_gen = avg_gen_s.iloc[0]
+        for t_user in [15, 30, 60]:
+            est = max_cc / (t_gen / t_user) if t_gen > 0 else 0
+            records.append({
+                "backend": backend, "track_id": track_id,
+                "max_concurrency": max_cc, "t_user_s": t_user,
+                "estimated_users": round(est),
+            })
+
+    if not records:
+        return
+
+    est_df = pd.DataFrame(records)
+    tracks = sorted(est_df["track_id"].unique())
+    n = len(tracks)
+    fig, axes = plt.subplots(1, n, figsize=(5 * n, 6), sharey=False)
+    if n == 1:
+        axes = [axes]
+    for ax, track_id in zip(axes, tracks):
+        sub = est_df[est_df["track_id"] == track_id]
+        pivot = sub.pivot_table(index="backend", columns="t_user_s", values="estimated_users")
+        pivot.plot(kind="bar", ax=ax)
+        ax.set_title(f"Est. Online Users — {track_id}")
+        ax.set_xlabel("Backend")
+        ax.set_ylabel("Estimated concurrent users")
+        ax.legend(title="T_user (s)")
+        ax.tick_params(axis="x", rotation=30)
+    fig.tight_layout()
+    fig.savefig(out / "c06_online_users.png", dpi=150)
+    plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Visualize benchmark results")
     parser.add_argument("csv", nargs="+", help="결과 CSV 파일 경로 (여러 개 가능)")
     parser.add_argument("--out", default="charts", help="차트 출력 디렉토리")
+    parser.add_argument("--concurrent-summary", default=None,
+                        help="concurrent_runner summary CSV (동시성 차트용)")
     args = parser.parse_args()
 
     dfs = [pd.read_csv(p) for p in args.csv]
@@ -209,6 +395,18 @@ def main():
     chart_memory(df, out_dir)
     chart_e2e_latency(df, out_dir)
     chart_heatmap(df, out_dir)
+
+    # 동시성 차트 (--concurrent-summary 제공 시)
+    if args.concurrent_summary:
+        cc_df = load_concurrent_summary(Path(args.concurrent_summary))
+        print(f"동시성 데이터: {len(cc_df)}행")
+        chart_concurrency_agg_tps(cc_df, out_dir)
+        chart_concurrency_p95_latency(cc_df, out_dir)
+        chart_concurrency_p95_ttft(cc_df, out_dir)
+        chart_concurrency_success_rate(cc_df, out_dir)
+        chart_concurrency_scaling_efficiency(cc_df, out_dir)
+        chart_concurrency_online_users(cc_df, out_dir)
+        print("동시성 차트 저장 완료 (c01~c06)")
 
     print(f"차트 저장 완료: {out_dir}/")
 

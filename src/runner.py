@@ -97,10 +97,9 @@ def run_track(
     else:
         prompt = build_generation_prompt(input_tokens, max_tokens)
 
-    # Ollama: 트랙별 실제 필요 ctx로 설정 (llama.cpp와 동일 조건)
+    # Ollama: full context 유지 (전 백엔드 동일 ctx)
     if backend_name == "ollama":
-        needed_ctx = min(input_tokens + max_tokens + 256, gen_cfg["context_window"])
-        backend._context_window = needed_ctx
+        backend._context_window = gen_cfg["context_window"]
 
     console.print(f"\n  [dim]{track_id}[/dim]  in≈{input_tokens} out={max_tokens}", end=" ")
 
@@ -206,6 +205,15 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
     prefill_tracks = config.get("prefill_tracks", [])
     all_results = []
 
+    # Mode B 경고: llamacpp 단일 엔진으로 하드웨어만 비교해야 함
+    if comparison_mode == "B":
+        active_backends = [b for b in backends if config["backends"].get(b, {}).get("enabled", True)]
+        if len(active_backends) > 1:
+            console.print("[yellow]⚠ Mode B: 여러 백엔드 실행 중 — 하드웨어 비교는 llamacpp 단일 엔진 권장[/yellow]")
+        if any(b != "llamacpp" for b in active_backends):
+            non_llama = [b for b in active_backends if b != "llamacpp"]
+            console.print(f"[yellow]⚠ Mode B: {non_llama} 포함 — 순수 하드웨어 비교 아님 (llamacpp + 동일 GGUF 사용 권장)[/yellow]")
+
     for backend_name in backends:
         bcfg = config["backends"].get(backend_name, {})
         if not bcfg.get("enabled", True):
@@ -240,15 +248,8 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
 
                 console.print(f"\n[bold]{model_cfg['id']}[/bold] [{quant_cfg['name']}]")
 
-                # llama.cpp: 실행할 트랙 기준 최소 ctx 계산 (KV cache 절약)
-                if backend_name == "llamacpp":
-                    needed = max(
-                        (t["input_tokens"] + t["max_tokens"] for t in gen_tracks + prefill_tracks),
-                        default=gen_cfg["context_window"],
-                    ) + 256
-                    load_ctx = min(needed, gen_cfg["context_window"])
-                else:
-                    load_ctx = gen_cfg["context_window"]
+                # 전 백엔드 동일 full context (공정 비교)
+                load_ctx = gen_cfg["context_window"]
 
                 # 모델 로드
                 try:

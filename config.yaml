@@ -79,6 +79,11 @@ concurrency_benchmark:
   # 포함할 트랙 (generation_tracks / prefill_tracks ID 기준)
   include_generation_tracks: ["gen-512", "gen-2048", "gen-8192"]
   include_prefill_tracks: []       # Phase 2에서 추가
+  # Phase 2 Open-loop: 도착률 목록 (req/s). 빈 리스트 = 비활성화
+  open_loop_rates: []              # e.g. [0.5, 1.0, 2.0]
+  open_loop_duration_s: 60        # 각 rate 측정 시간 (seconds)
+  # 환산 온라인 사용자 추정: max_concurrency / (T_gen / T_user)
+  user_interval_assumptions_s: [15, 30, 60]
   # SLA 기준
   sla:
     success_rate_min: 0.99
