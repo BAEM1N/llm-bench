@@ -134,6 +134,7 @@ uv run python -m src.runner --output results/my_run.csv
 | Mac (Apple Silicon) | 128GB unified | llama.cpp, LM Studio, Ollama, MLX | `macbook-m-series` |
 | DGX Spark (GB10) | 128GB unified | llama.cpp, vLLM (AWQ) | `dgx-spark` |
 | Ryzen AI MAX 395+ (HP Z2 Mini G1a) | 128GB unified (Strix Halo) | llama.cpp (ROCm/Vulkan), Ollama (ROCm), vLLM (ROCm, 실험적) | `ryzen-ai-max-395` |
+| Ryzen 9 5950X + RTX 3090 × 2 (Linux) | 128GB DDR4 + 48GB VRAM | llama.cpp (CUDA), Ollama (CUDA), vLLM (CUDA) | `linux-5950x-3090x2` |
 
 > 크로스 플랫폼 비교 시 `hardware.id`를 반드시 변경한 후 실행할 것.
 
@@ -169,6 +170,15 @@ uv run python -m src.runner --output results/my_run.csv
 - GGUF 기본 경로: `/models/gguf` (환경변수 `GGUF_DIR`로 오버라이드 가능)
 - vLLM AWQ 기본 경로: `/models/vllm` (환경변수 `VLLM_DIR`로 오버라이드 가능)
 - `config.yaml`의 `hardware.id`를 `dgx-spark`로 변경 필수
+
+### Ryzen 9 5950X + RTX 3090 × 2 설정 (Linux)
+- **아키텍처**: 별도 VRAM 24GB × 2 = 48GB. CPU RAM 128GB DDR4 (GPU offload 가능)
+- 가능 모델 (GPU only): 9B AWQ ✅, 27B AWQ ✅, 35B-A3B AWQ ✅, 122B AWQ ❌ (65GB > 48GB)
+- 122B는 CPU offload (llama.cpp `--n-gpu-layers` 조정) 또는 DGX Spark에서 실행
+- llama.cpp: CUDA 빌드 (`cmake -DGGML_CUDA=ON ..`)
+- vLLM: `tensor_parallel_size: 2`, `max_model_len: 32768` (KV cache 제약)
+- MLX: 불가 (macOS 전용)
+- `config.yaml`의 `hardware.id`를 `linux-5950x-3090x2`로 변경 필수
 
 ### Ryzen AI MAX 395+ 설정 (HP Z2 Mini G1a, 128GB)
 - **아키텍처**: Strix Halo — iGPU (Radeon 8060S, 40 CU, RDNA 3.5) + 128GB 유니파이드 메모리
