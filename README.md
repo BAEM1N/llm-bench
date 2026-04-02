@@ -38,8 +38,8 @@ All models use **Linear Attention + Full Attention (3:1 ratio)** hybrid architec
 
 ### Generation TPS — Q4_K_M
 
-| Model | MLX | llama.cpp | Ollama |
-|-------|----:|----------:|-------:|
+| Model | **MLX** | **llama.cpp** | **Ollama** |
+|-------|--------:|--------------:|-----------:|
 | 9B | **101.6** | 73.8 | 56.4 |
 | 27B | **30.9** | 20.4 | 17.9 |
 | 35B-A3B (MoE) | **142.2** | 93.6 | 60.4 |
@@ -47,8 +47,8 @@ All models use **Linear Attention + Full Attention (3:1 ratio)** hybrid architec
 
 ### Generation TPS — Q8_0
 
-| Model | MLX | llama.cpp | Ollama |
-|-------|----:|----------:|-------:|
+| Model | **MLX** | **llama.cpp** | **Ollama** |
+|-------|--------:|--------------:|-----------:|
 | 9B | **59.0** | 51.1 | 41.1 |
 | 27B | **17.2** | 14.9 | 12.8 |
 | 35B-A3B (MoE) | **102.9** | 88.2 | 53.5 |
@@ -58,20 +58,20 @@ All models use **Linear Attention + Full Attention (3:1 ratio)** hybrid architec
 
 ### Prefill TPS — 128k context, Q4_K_M
 
-| Model | llama.cpp | Ollama | MLX |
-|-------|----------:|-------:|----:|
-| 9B | **574,324** (229ms) | 65,011 (2s) | 2,821 (46s) |
-| 27B | **441,661** (297ms) | OOM | 797 (162s) |
-| 35B-A3B (MoE) | **571,342** (231ms) | 61,548 | 2,980 |
-| 122B-A10B (MoE) | **488,660** (269ms) | 27,748 | 1,135 |
+| Model | **MLX** | **llama.cpp** | **Ollama** |
+|-------|--------:|--------------:|-----------:|
+| 9B | 2,821 (46s) | **574,324** (229ms) | 65,011 (2s) |
+| 27B | 797 (162s) | **441,661** (297ms) | OOM |
+| 35B-A3B (MoE) | 2,980 | **571,342** (231ms) | 61,548 |
+| 122B-A10B (MoE) | 1,135 | **488,660** (269ms) | 27,748 |
 
 > llama.cpp Flash Attention 압도. 128k 처리를 229ms에 완료.  
 > Ollama 27B 128k: num_ctx=262144 전체 KV 캐시 pre-allocate → OOM
 
 ### Memory Usage — Q4_K_M (GB)
 
-| Model | MLX | llama.cpp | Ollama |
-|-------|----:|----------:|-------:|
+| Model | **MLX** | **llama.cpp** | **Ollama** |
+|-------|--------:|--------------:|-----------:|
 | 9B | **4.7** | 6.7 | 19.9 |
 | 27B | **14.1** | 17.8 | 40.4 |
 | 35B-A3B (MoE) | **18.2** | 21.5 | 33.3 |
@@ -89,8 +89,8 @@ All models use **Linear Attention + Full Attention (3:1 ratio)** hybrid architec
 
 ### E2E Latency — gen-8192, Q4_K_M (seconds)
 
-| Model | MLX | llama.cpp | Ollama |
-|-------|----:|----------:|-------:|
+| Model | **MLX** | **llama.cpp** | **Ollama** |
+|-------|--------:|--------------:|-----------:|
 | 9B | 51.7 | 55.6 | 102.7 |
 | 27B | 165.6 | 161.2 | 337.0 |
 | **35B-A3B (MoE)** | **21.8** | 55.3 | 85.8 |
