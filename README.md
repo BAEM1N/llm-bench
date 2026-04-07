@@ -193,5 +193,5 @@ uv run python -m src.runner --models qwen3.5-35b-a3b --tracks gen-512 prefill-16
 ## Blog
 
 - [Part 1: 실험 방법론](https://baem1n.github.io/posts/llm-bench-01-methodology)
-- [Part 2: 상세 분석](https://baem1n.github.io/posts/llm-bench-02-results)
-- [Part 3: 결과표](https://baem1n.github.io/posts/llm-bench-03-results)
+- [Part 2: 상세 분석](https://baem1n.github.io/posts/llm-bench-02-results-analysis)
+- [Part 3: 결과표](https://baem1n.github.io/posts/llm-bench-03-results-tables)
