@@ -6,9 +6,9 @@ labels: experiment-request
 assignees: ''
 ---
 
-> [!WARNING]
-> Experiment requests from **unverified individuals or organizations** may be ignored without notice.
-> To be considered, the model should be published by a recognized research lab, company, or well-established open-source maintainer on Hugging Face.
+> [!NOTE]
+> This benchmark measures **single-stream inference speed** (generation tok/s, prefill tok/s, TTFT) under controlled conditions — not model quality, accuracy, or multi-user throughput.
+> Models should be available on Hugging Face (GGUF, GPTQ, or BF16).
 
 ## Model
 
@@ -17,17 +17,20 @@ assignees: ''
 
 ## Target Device
 
-- [ ] MacBook Pro 14 (M5 Max, 128GB)
-- [ ] DGX Spark (GB10, 128GB)
-- [ ] Ryzen AI MAX+ 395 (128GB)
+- [ ] MacBook Pro 14 (M5 Max, 128GB unified)
+- [ ] RTX 3090×2 (Ryzen 9 5950X, 48GB VRAM)
+- [ ] DGX Spark (GB10, 128GB unified)
+- [ ] Ryzen AI MAX+ 395 (HP Z2 Mini G1a, 96GB VRAM)
+- [ ] All available
 - [ ] Other: 
 
 ## Requested Backends
-- [ ] MLX
 - [ ] llama.cpp
+- [ ] MLX (Mac only)
 - [ ] Ollama
 - [ ] vLLM
-- [ ] Other: 
+- [ ] Lemonade (Ryzen AI only)
+- [ ] All available for target device
 
 ## Requested Tracks
 
