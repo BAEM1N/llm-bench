@@ -4,10 +4,11 @@ import subprocess
 import httpx
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from .base import BaseBackend, GenerateResult
 
-STARTUP_TIMEOUT = 300  # seconds
+STARTUP_TIMEOUT = 1800  # seconds — 122B 모델 + Vulkan shader 컴파일에 최대 30분
 
 
 class LlamaCppBackend(BaseBackend):
@@ -58,15 +59,20 @@ class LlamaCppBackend(BaseBackend):
         self._context_window = context_window
         gguf_path = str(Path(gguf_path).expanduser())
 
+        parsed = urlparse(self.base_url)
+        port = str(parsed.port or 8080)
+        host = parsed.hostname or "127.0.0.1"
+
         cmd = [
             self.binary,
             "--model", gguf_path,
             "--ctx-size", str(context_window),
             "--n-gpu-layers", str(self.n_gpu_layers),
-            "--port", "8080",
-            "--host", "127.0.0.1",
+            "--port", port,
+            "--host", host,
             "--no-mmap",
-            "--log-disable",
+            "--no-cache-prompt",              # prompt cache 비활성화 (cold prefill 측정)
+            "--slot-prompt-similarity", "0",  # prefix reuse 비활성화
         ]
         if self.flash_attn:
             cmd.extend(["--flash-attn", "on"])
@@ -83,15 +89,22 @@ class LlamaCppBackend(BaseBackend):
         if self.extra_args:
             cmd.extend(self.extra_args)
 
+        self._server_log = open("/tmp/llamacpp_server.log", "w")
         self._proc = subprocess.Popen(
             cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=self._server_log,
+            stderr=self._server_log,
         )
 
         # 서버 준비 대기
         deadline = time.time() + STARTUP_TIMEOUT
         while time.time() < deadline:
+            # 프로세스가 이미 죽었으면 즉시 실패
+            if self._proc.poll() is not None:
+                self._server_log.close()
+                with open("/tmp/llamacpp_server.log") as f:
+                    tail = f.read()[-500:]
+                raise RuntimeError(f"llama-server exited (code={self._proc.returncode}): {tail}")
             try:
                 r = httpx.get(f"{self.base_url}/health", timeout=3)
                 if r.status_code == 200:
@@ -130,6 +143,9 @@ class LlamaCppBackend(BaseBackend):
             except subprocess.TimeoutExpired:
                 self._proc.kill()
             self._proc = None
+        if hasattr(self, "_server_log") and self._server_log:
+            self._server_log.close()
+            self._server_log = None
 
     def generate(
         self,
@@ -154,7 +170,7 @@ class LlamaCppBackend(BaseBackend):
         output_tokens = 0
         timings = {}
 
-        with httpx.Client(timeout=300) as client:
+        with httpx.Client(timeout=1800) as client:  # 122B partial offload: gen-8192 최대 30분
             with client.stream("POST", f"{self.base_url}/completion", json=payload) as resp:
                 for line in resp.iter_lines():
                     if not line:

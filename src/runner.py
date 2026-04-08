@@ -1,5 +1,16 @@
-"""메인 벤치마크 실행기 — Generation + Prefill 2-Track."""
+"""메인 벤치마크 실행기 — Generation + Prefill 2-Track.
+
+v3: 실험 설계 개선
+- OOM/skip → CSV 실패 row 기록
+- Track A/B config 레벨 분리
+- native context 강제 (줄이지 않음, OOM=실패 기록)
+- run마다 prompt 재생성 (warmup과 measure 분리)
+- model_id를 prompt generator에 전달 (tokenizer 정확화)
+- 실행 순서 랜덤화
+- cold prefill: prefill track마다 서버 재시작
+"""
 import argparse
+import random
 import time
 from datetime import datetime
 from pathlib import Path
@@ -11,13 +22,14 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from .metrics import BenchmarkResult, append_result, aggregate_results, median_result
 from .thermal import wait_for_cooldown, log_temp, log_power
-from .prompt_gen import build_prefill_prompt, build_generation_prompt
+from .prompt_gen import build_prefill_prompt, build_generation_prompt, init_tokenizer
 from .backends.ollama import OllamaBackend
 from .backends.lmstudio import LMStudioBackend
 from .backends.llamacpp import LlamaCppBackend
 from .backends.mlx_backend import MLXBackend
 from .backends.vllm_backend import VLLMBackend
 from .backends.sglang_backend import SGLangBackend
+from .backends.lemonade_backend import LemonadeBackend
 
 console = Console()
 
@@ -68,18 +80,75 @@ def make_backend(name: str, cfg: dict):
             cpu_offload_gb=cfg.get("cpu_offload_gb", 0.0),
             extra_args=cfg.get("extra_args", []),
         )
+    if name == "lemonade":
+        return LemonadeBackend(base_url=cfg.get("base_url", "http://localhost:8000"))
     raise ValueError(f"Unknown backend: {name}")
 
 
-def run_one(
-    backend, prompt: str, max_tokens: int, gen_cfg: dict
-):
+def run_one(backend, prompt: str, max_tokens: int, gen_cfg: dict):
     return backend.generate(
         prompt=prompt,
         max_tokens=max_tokens,
         temperature=gen_cfg["temperature"],
         top_p=gen_cfg["top_p"],
         repeat_penalty=gen_cfg["repeat_penalty"],
+    )
+
+
+def _resolve_quant_label(backend_name: str, quant_cfg: dict) -> str:
+    """vLLM/SGLang은 GPTQ/AWQ 모델을 사용하므로 실제 양자화 방식을 CSV에 기록."""
+    if backend_name in ("vllm", "sglang"):
+        vllm_q = quant_cfg.get("vllm_quantization")
+        if vllm_q:
+            return f"{quant_cfg['name']}({vllm_q})"
+        vllm_model = quant_cfg.get("vllm_model", "")
+        if "GPTQ" in vllm_model:
+            return f"{quant_cfg['name']}(gptq)"
+        if "AWQ" in vllm_model:
+            return f"{quant_cfg['name']}(awq)"
+        if vllm_model:
+            return f"{quant_cfg['name']}(bf16)"
+    return quant_cfg["name"]
+
+
+def _make_skip_row(
+    backend_name, backend_version, model_cfg, quant_cfg, track, track_type,
+    hardware_id, comparison_mode, model_ctx, reason, memory_method="unknown",
+) -> BenchmarkResult:
+    """OOM/skip/로드실패 → CSV에 실패 row 기록."""
+    return BenchmarkResult(
+        timestamp=datetime.now().isoformat(),
+        hardware_id=hardware_id,
+        comparison_mode=comparison_mode,
+        backend=backend_name,
+        backend_version=backend_version,
+        model=model_cfg["id"],
+        architecture=model_cfg["architecture"],
+        total_params=model_cfg["total_params"],
+        active_params=model_cfg["active_params"],
+        quantization=quant_cfg["name"],
+        track_id=track["id"],
+        track_type=track_type,
+        input_tokens=track["input_tokens"],
+        max_tokens=track["max_tokens"],
+        run_number=0,
+        run_status=f"skip:{reason}",
+        ttft_ms=-1.0,
+        prefill_tps=0.0,
+        gen_tps=-1.0,
+        total_latency_s=-1.0,
+        output_tokens=0,
+        hit_rate=-1.0,
+        peak_memory_gb=0.0,
+        cpu_temp_celsius=-1,
+        context_window=model_ctx,
+        prefill_tps_source="none",
+        actual_runs=0,
+        cpu_power_w=-1.0,
+        gpu_power_w=-1.0,
+        efficiency_tps_per_w=-1.0,
+        peak_memory_method=memory_method,
+        schema_version="3",
     )
 
 
@@ -97,35 +166,32 @@ def run_track(
     output_path: Path,
     model_memory_gb: float = 0.0,
     comparison_mode: str = "A",
+    model_id: str = "",
 ) -> list[BenchmarkResult]:
 
     track_id = track["id"]
     max_tokens = track["max_tokens"]
     input_tokens = track["input_tokens"]
 
-    # 프롬프트 생성 — 트랙 타입 무관하게 input_tokens로 길이 제어
-    if track_type == "prefill":
-        prompt = build_prefill_prompt(input_tokens)
-    else:
-        prompt = build_generation_prompt(input_tokens, max_tokens)
-
-    # Ollama: full context 유지 (전 백엔드 동일 ctx)
+    # 모델 네이티브 컨텍스트 (줄이지 않음)
+    model_ctx = model_cfg.get("context_window", gen_cfg["context_window"])
     if backend_name == "ollama":
-        backend._context_window = gen_cfg["context_window"]
+        backend._context_window = model_ctx
 
     console.print(f"\n  [dim]{track_id}[/dim]  in≈{input_tokens} out={max_tokens}", end=" ")
 
-    # 워밍업 (bench_cfg["warmup_runs"]회)
+    # #4: warmup은 별도 prompt (nonce로 매번 다름)
     for _ in range(bench_cfg.get("warmup_runs", 1)):
         try:
-            run_one(backend, prompt, max_tokens, gen_cfg)
+            warmup_prompt = (build_prefill_prompt(input_tokens, model_id)
+                            if track_type == "prefill"
+                            else build_generation_prompt(input_tokens, max_tokens, model_id))
+            run_one(backend, warmup_prompt, max_tokens, gen_cfg)
             console.print("🔥", end=" ")
         except Exception as e:
             console.print(f"[red]워밍업 실패: {e}[/red]")
             return []
 
-    # 행을 버퍼에 모은 뒤 actual_runs 확정 후 일괄 기록
-    # — actual_runs는 루프 종료 전까지 알 수 없으므로 이중 기록을 피함
     pending: list[BenchmarkResult] = []
     run_results: list[BenchmarkResult] = []
 
@@ -147,7 +213,7 @@ def run_track(
             architecture=model_cfg["architecture"],
             total_params=model_cfg["total_params"],
             active_params=model_cfg["active_params"],
-            quantization=quant_cfg["name"],
+            quantization=_resolve_quant_label(backend_name, quant_cfg),
             track_id=track_id,
             track_type=track_type,
             input_tokens=input_tokens,
@@ -162,18 +228,17 @@ def run_track(
             hit_rate=hit_rate,
             peak_memory_gb=model_memory_gb,
             cpu_temp_celsius=ti.get("cpu_temp_celsius") or -1,
-            context_window=gen_cfg["context_window"],
+            context_window=model_ctx,
             prefill_tps_source=prefill_tps_source,
-            actual_runs=-1,  # 루프 후 확정
+            actual_runs=-1,
             cpu_power_w=pi["cpu_power_w"],
             gpu_power_w=pi["gpu_power_w"],
             efficiency_tps_per_w=efficiency,
             peak_memory_method=backend.memory_method,
-            schema_version="2",
+            schema_version="3",
         )
 
     for run_num in range(1, bench_cfg["measure_runs"] + 1):
-        # 온도 체크
         if thermal_cfg.get("enabled"):
             wait_for_cooldown(
                 thermal_cfg["max_temp_celsius"],
@@ -185,16 +250,20 @@ def run_track(
         temp_info = log_temp()
         power_info = log_power()
 
+        # #4: 매 run마다 새 prompt 생성 (nonce prefix로 cache 완전 차단)
+        if track_type == "prefill":
+            prompt = build_prefill_prompt(input_tokens, model_id)
+        else:
+            prompt = build_generation_prompt(input_tokens, max_tokens, model_id)
+
         try:
             result = run_one(backend, prompt, max_tokens, gen_cfg)
         except Exception as e:
             console.print(f"[red]Run {run_num} 실패: {e}[/red]")
-            # 실패 run도 버퍼에 추가 (status="failed", 측정값 -1)
             pending.append(_make_row(run_num, "failed",
                                      temp_info=temp_info, power_info=power_info))
             continue
 
-        # backend native prefill_tps 우선, 없으면 input_tokens / TTFT 폴백
         if result.prompt_tps > 0:
             prefill_tps = result.prompt_tps
             prefill_tps_source = result.prompt_tps_source
@@ -202,10 +271,6 @@ def run_track(
             prefill_tps = (input_tokens / (result.ttft_ms / 1000)) if result.ttft_ms > 0 else 0.0
             prefill_tps_source = "ttft_estimate"
 
-        # hit_rate = 생성 완주율 (output_tokens / max_tokens). 품질 지표가 아님.
-        # hit_rate > 0.9: numbered format이 EOS 억제에 효과적으로 작동.
-        # hit_rate < 0.5: 모델이 일찍 종료 → 결과 신뢰도 주의.
-        # 반복/루프/저품질 장문도 hit_rate 높게 나올 수 있음.
         hit_rate = round(result.output_tokens / max_tokens, 4) if track_type == "generation" else -1.0
 
         bench_result = _make_row(run_num, "ok", result,
@@ -226,7 +291,6 @@ def run_track(
         if run_num < bench_cfg["measure_runs"]:
             time.sleep(bench_cfg["inter_run_sleep"])
 
-    # actual_runs 확정 후 전체 행(성공+실패) 일괄 기록
     actual = len(run_results)
     target = bench_cfg["measure_runs"]
     for row in pending:
@@ -259,9 +323,15 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
     hardware_id = config.get("hardware", {}).get("id", "unknown")
     comparison_mode = config.get("comparison_mode", "A")
 
-    gen_tracks = config.get("generation_tracks", [])
-    prefill_tracks = config.get("prefill_tracks", [])
+    gen_tracks = list(config.get("generation_tracks", []))
+    prefill_tracks = list(config.get("prefill_tracks", []))
     all_results = []
+
+    # 실행 순서 랜덤화
+    random.shuffle(gen_tracks)
+    random.shuffle(prefill_tracks)
+    console.print(f"[dim]Randomized gen order: {[t['id'] for t in gen_tracks]}[/dim]")
+    console.print(f"[dim]Randomized prefill order: {[t['id'] for t in prefill_tracks]}[/dim]")
 
     # Mode B: llamacpp 단일 엔진으로 강제 필터링
     if comparison_mode == "B":
@@ -276,6 +346,14 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
             console.print("[red]Mode B: llamacpp 백엔드가 없음 — 실험 중단[/red]")
             return
 
+    # backend / model 순서 랜덤화
+    random.shuffle(backends)
+    model_list = list(config["models"])
+    random.shuffle(model_list)
+    config["models"] = model_list
+    console.print(f"[dim]Randomized backends: {backends}[/dim]")
+    console.print(f"[dim]Randomized models: {[m['id'] for m in model_list]}[/dim]")
+
     for backend_name in backends:
         bcfg = config["backends"].get(backend_name, {})
         if not bcfg.get("enabled", True):
@@ -288,6 +366,9 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
         for model_cfg in config["models"]:
             if models and model_cfg["id"] not in models:
                 continue
+
+            # #5: tokenizer 초기화 (model_id 전달)
+            model_id = model_cfg.get("id", "")
 
             for quant_cfg in model_cfg["quantizations"]:
                 # 백엔드별 모델 식별자
@@ -310,13 +391,19 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
                     if not model_ref:
                         console.print(f"[yellow]Skip SGLang: {model_cfg['id']} {quant_cfg['name']} (sglang_model 미설정)[/yellow]")
                         continue
+                elif backend_name == "lemonade":
+                    model_ref = quant_cfg.get("lemonade_model") or quant_cfg.get("gguf_path", "")
+                    if not model_ref:
+                        console.print(f"[yellow]Skip Lemonade: {model_cfg['id']} {quant_cfg['name']} (lemonade_model 미설정)[/yellow]")
+                        continue
                 else:
                     model_ref = quant_cfg["gguf_path"]
 
                 console.print(f"\n[bold]{model_cfg['id']}[/bold] [{quant_cfg['name']}]")
 
-                # 전 백엔드 동일 full context (공정 비교)
-                load_ctx = gen_cfg["context_window"]
+                # per-model context_window, config 상한 적용
+                model_ctx = model_cfg.get("context_window", gen_cfg["context_window"])
+                load_ctx = min(gen_cfg["context_window"], model_ctx)
 
                 # vLLM / SGLang: quantization type을 quant_cfg에서 per-model 재설정
                 if backend_name == "vllm" and "vllm_quantization" in quant_cfg:
@@ -326,13 +413,22 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
                     if q is not None:
                         backend.quantization = q
 
-                # 모델 로드
+                # 모델 로드 — 실패 시 전 track에 실패 row 기록
                 try:
                     with Progress(SpinnerColumn(), TextColumn("모델 로드 중..."), TimeElapsedColumn(), transient=True) as p:
                         p.add_task("")
                         backend.load_model(model_ref, quant_cfg["gguf_path"], load_ctx)
                 except Exception as e:
                     console.print(f"[red]로드 실패: {e}[/red]")
+                    # #1: OOM/로드실패 → 전 track에 실패 row 기록
+                    for track in gen_tracks + prefill_tracks:
+                        tt = "generation" if track["id"].startswith("gen") else "prefill"
+                        row = _make_skip_row(
+                            backend_name, backend.version, model_cfg, quant_cfg,
+                            track, tt, hardware_id, comparison_mode, model_ctx,
+                            f"load_fail:{str(e)[:80]}", backend.memory_method,
+                        )
+                        append_result(row, output_path)
                     try:
                         backend.unload_model()
                     except Exception:
@@ -343,28 +439,105 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
                 if model_memory_gb > 0:
                     console.print(f"  [dim]모델 메모리: {model_memory_gb:.2f} GB[/dim]")
 
-                # Generation tracks
+                # Generation tracks — ctx 초과 시 실패 row 기록 (skip 아닌 기록)
+                _server_backends = {"llamacpp", "vllm", "sglang"}
+                _gen_server_dead = False  # 서버 crash 감지 플래그
                 console.print("  [bold yellow]── Generation ──[/bold yellow]")
                 for track in gen_tracks:
+                    needed = track["input_tokens"] + track["max_tokens"]
+                    if needed > model_ctx:
+                        console.print(f"  [yellow]OOM record: {track['id']} ({needed} > ctx {model_ctx})[/yellow]")
+                        row = _make_skip_row(
+                            backend_name, backend.version, model_cfg, quant_cfg,
+                            track, "generation", hardware_id, comparison_mode,
+                            model_ctx, "ctx_exceeded", backend.memory_method,
+                        )
+                        append_result(row, output_path)
+                        continue
+
+                    # 서버 crash 후 자동 재시작 (gen track 간)
+                    if _gen_server_dead and backend_name in _server_backends:
+                        console.print("  [yellow]서버 crash 감지 → 재시작 시도...[/yellow]")
+                        try:
+                            backend.unload_model()
+                        except Exception:
+                            pass
+                        time.sleep(5)
+                        try:
+                            backend.load_model(model_ref, quant_cfg["gguf_path"], load_ctx)
+                            model_memory_gb = backend.get_model_memory_gb()
+                            _gen_server_dead = False
+                            console.print("  [green]서버 재시작 성공[/green]")
+                        except Exception as e:
+                            console.print(f"  [red]서버 재시작 실패: {e} → 남은 gen track 전부 skip[/red]")
+                            for remaining_track in gen_tracks[gen_tracks.index(track):]:
+                                rn = remaining_track["input_tokens"] + remaining_track["max_tokens"]
+                                if rn > model_ctx:
+                                    continue
+                                row = _make_skip_row(
+                                    backend_name, backend.version, model_cfg, quant_cfg,
+                                    remaining_track, "generation", hardware_id, comparison_mode,
+                                    model_ctx, f"server_crash:{str(e)[:60]}", backend.memory_method,
+                                )
+                                append_result(row, output_path)
+                            break
+
                     results = run_track(
                         backend, backend_name, model_cfg, quant_cfg,
                         track, "generation",
                         bench_cfg, thermal_cfg, gen_cfg,
                         hardware_id, output_path, model_memory_gb,
-                        comparison_mode,
+                        comparison_mode, model_id,
                     )
                     all_results.extend(results)
+
+                    # run_track이 빈 결과 반환 (warmup 실패) → 서버 상태 확인
+                    if not results and backend_name in _server_backends:
+                        try:
+                            import httpx
+                            r = httpx.get(f"{bcfg.get('base_url', 'http://localhost:8080')}/health", timeout=3)
+                            if r.status_code != 200:
+                                _gen_server_dead = True
+                        except Exception:
+                            _gen_server_dead = True
+
                     time.sleep(bench_cfg["inter_track_sleep"])
 
-                # Prefill tracks
+                # Prefill tracks — cold prefill: 서버 백엔드는 track마다 재시작
                 console.print("  [bold blue]── Prefill ──[/bold blue]")
                 for track in prefill_tracks:
+                    needed = track["input_tokens"] + track["max_tokens"]
+                    if needed > model_ctx:
+                        console.print(f"  [yellow]OOM record: {track['id']} ({needed} > ctx {model_ctx})[/yellow]")
+                        row = _make_skip_row(
+                            backend_name, backend.version, model_cfg, quant_cfg,
+                            track, "prefill", hardware_id, comparison_mode,
+                            model_ctx, "ctx_exceeded", backend.memory_method,
+                        )
+                        append_result(row, output_path)
+                        continue
+                    # cold prefill: 서버 백엔드는 track마다 재시작
+                    if backend_name in _server_backends:
+                        backend.unload_model()
+                        time.sleep(3)
+                        try:
+                            backend.load_model(model_ref, quant_cfg["gguf_path"], load_ctx)
+                            model_memory_gb = backend.get_model_memory_gb()
+                        except Exception as e:
+                            console.print(f"[red]Prefill 재시작 실패: {e}[/red]")
+                            row = _make_skip_row(
+                                backend_name, backend.version, model_cfg, quant_cfg,
+                                track, "prefill", hardware_id, comparison_mode,
+                                model_ctx, f"reload_fail:{str(e)[:80]}", backend.memory_method,
+                            )
+                            append_result(row, output_path)
+                            continue
                     results = run_track(
                         backend, backend_name, model_cfg, quant_cfg,
                         track, "prefill",
                         bench_cfg, thermal_cfg, gen_cfg,
                         hardware_id, output_path, model_memory_gb,
-                        comparison_mode,
+                        comparison_mode, model_id,
                     )
                     all_results.extend(results)
                     time.sleep(bench_cfg["inter_track_sleep"])
@@ -383,7 +556,6 @@ def _print_summary(results: list[BenchmarkResult]) -> None:
         return
     console.rule("[bold]최종 요약")
 
-    # 중앙값 집계
     from collections import defaultdict
     groups: dict[tuple, list] = defaultdict(list)
     for r in results:
@@ -424,7 +596,6 @@ def main():
 
     config = load_config(Path(args.config))
 
-    # track 필터
     if args.tracks:
         config["generation_tracks"] = [t for t in config["generation_tracks"] if t["id"] in args.tracks]
         config["prefill_tracks"] = [t for t in config["prefill_tracks"] if t["id"] in args.tracks]
@@ -441,7 +612,6 @@ def main():
     console.print(f"Prefill tracks:    {[t['id'] for t in config['prefill_tracks']]}")
     console.print(f"Thermal guard: {config.get('thermal', {}).get('enabled', False)}\n")
 
-    # --backends 미지정 시 config에서 enabled 백엔드 자동 수집
     backends = args.backends or [
         name for name, cfg in config.get("backends", {}).items()
         if cfg.get("enabled", True)

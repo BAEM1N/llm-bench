@@ -54,7 +54,7 @@ class LMStudioBackend(BaseBackend):
         output_tokens = 0
         buffer = ""
 
-        with httpx.Client(timeout=300) as client:
+        with httpx.Client(timeout=1800) as client:
             with client.stream("POST", f"{self.base_url}/v1/chat/completions", json=payload) as resp:
                 for line in resp.iter_lines():
                     if not line or not line.startswith("data: "):

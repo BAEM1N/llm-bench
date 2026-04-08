@@ -18,24 +18,30 @@ Qwen3.5 패밀리(9B / 27B / 35B-A3B MoE / 122B-A10B MoE)를 여러 백엔드와
 llm-bench/
 ├── config.yaml              # 벤치마크 설정 (tracks, models, backends, thermal)
 ├── pyproject.toml           # uv 의존성
-├── MODEL_STATUS.md          # 모델 다운로드 현황 (링크·명령어 포함)
-├── PLAN.md                  # 전체 실험 계획
 ├── scripts/
 │   ├── download.sh          # 디바이스별 모델 다운로드 (mac / dgx-spark / ryzen-ai)
-│   └── check_models.sh      # GGUF / MLX / Ollama 완료 여부 체크
+│   ├── check_models.sh      # GGUF / MLX / Ollama 완료 여부 체크
+│   └── run_*.sh             # 디바이스별 실행 스크립트
+├── docs/
+│   ├── dgx-spark.md         # DGX Spark 설정 가이드
+│   ├── ryzen-ai-395.md      # Ryzen AI MAX 395+ 설정 가이드
+│   └── vllm-sglang-diagnosis.md  # vLLM/SGLang 환경 진단 보고서
 ├── src/
-│   ├── runner.py            # 메인 오케스트레이터
+│   ├── runner.py            # 메인 오케스트레이터 (v3: 랜덤화, 캐시 방지, 쿨다운)
 │   ├── metrics.py           # BenchmarkResult dataclass, CSV append
 │   ├── memory.py            # macOS unified memory 모니터 (vm_stat)
 │   ├── thermal.py           # CPU 온도 측정 (powermetrics / istats)
-│   ├── prompt_gen.py        # 프롬프트 생성 (prefill / generation 트랙)
+│   ├── prompt_gen.py        # 프롬프트 생성 (토크나이저 기반, nonce prefix)
 │   └── backends/
 │       ├── base.py          # BaseBackend, GenerateResult
 │       ├── ollama.py        # /api/generate 스트리밍
 │       ├── lmstudio.py      # /v1/chat/completions SSE
 │       ├── llamacpp.py      # llama-server 서브프로세스 + /completion
-│       └── mlx_backend.py   # mlx_lm.stream_generate() 직접 호출
-├── results/                 # 벤치마크 CSV 결과
+│       ├── mlx_backend.py   # mlx_lm.stream_generate() 직접 호출
+│       ├── vllm_backend.py  # vLLM OpenAI API (Docker/native)
+│       ├── sglang_backend.py # SGLang OpenAI API
+│       └── lemonade_backend.py # AMD Lemonade Server API
+├── results/                 # 벤치마크 CSV 결과 (gitignored)
 └── visualize.py             # 결과 시각화 (7종 차트)
 ```
 
@@ -59,11 +65,13 @@ llm-bench/
 | prefill-128k | 131,072 |
 
 - **출력 고정 이유**: 크로스 플랫폼 공정 비교, 출력 길이 편차 제거
-- **컨텍스트 윈도우**: 262,144 (Qwen3.5 최대)
+- **컨텍스트 윈도우**: 모델별 상이 (Qwen3.5: 262,144 / Gemma 4: 131,072). Runner가 per-model context_window로 track 자동 스킵.
 - **측정**: warmup 1회 + measure 5회, 중앙값 집계
 - **온도 가드**: 85°C 초과 시 60초 쿨다운 대기
 
 ## 모델 정보
+
+### Qwen3.5 시리즈
 
 | 모델 | 아키텍처 | Total Params | Active Params | Context Window |
 |------|----------|-------------|---------------|----------------|
@@ -72,8 +80,26 @@ llm-bench/
 | Qwen3.5-35B-A3B | MoE | 35B | ~3B | 262,144 (256K) |
 | Qwen3.5-122B-A10B | MoE | 122B | ~10B | 262,144 (256K) |
 
+### Gemma 4 시리즈 (Google, multimodal — text-only 벤치마크)
+
+| 모델 | 아키텍처 | Total Params | Active Params | Context Window |
+|------|----------|-------------|---------------|----------------|
+| Gemma-4-E2B | Dense | 5B | 5B | 131,072 (128K) |
+| Gemma-4-E4B | Dense | 8B | 8B | 131,072 (128K) |
+| Gemma-4-26B-A4B | MoE | 26B | ~4B | 262,144 (256K) |
+| Gemma-4-31B | Dense | 31B | 31B | 262,144 (256K) |
+
+- GGUF 소스: **unsloth** (Dynamic 2.0 양자화)
+- MLX 소스: **unsloth** (E2B/E4B — UD-4bit, 8bit), **mlx-community** (26B-A4B — 4bit/8bit). 31B MLX는 추후 추가.
+- vLLM/SGLang: E2B/E4B는 **BF16 직접** (VRAM 충분), 26B/31B는 Google 공식 GPTQ/AWQ 미출시 → 추후 추가.
+- **주의**: multimodal 모델이나 text-only GGUF로 벤치마크 가능. Vision projector(mmproj)는 별도.
+- **26B-A4B GGUF**: unsloth은 UD(Dynamic) 양자화만 제공 → Q4_K_M 대신 UD-Q4_K_M 사용
+- **vLLM caveat**: Qwen3.5는 공식 GPTQ-Int4 사용. Gemma 4는 공식 양자화 미출시 — 나오면 추가 예정.
+
+### 공통
+
 - GGUF 소스: **unsloth** (Dynamic 2.0 양자화, lmstudio-community 대비 품질 우수)
-- MLX 소스: **mlx-community** (4bit/8bit, 전 모델 제공)
+- MLX 소스: **mlx-community** (4bit/8bit)
 
 ## 모델 경로 (Mac 기준)
 

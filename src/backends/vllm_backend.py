@@ -11,6 +11,7 @@ AWQ 사용 시: vllm_model = HF 모델 ID (e.g. Qwen/Qwen3.5-9B-Instruct-AWQ)
   → HF에서 다운로드 필요. tensor-parallel 지원.
 """
 import json
+import os
 import time
 import subprocess
 from urllib.parse import urlparse
@@ -19,7 +20,7 @@ from typing import Optional
 
 from .base import BaseBackend, GenerateResult
 
-STARTUP_TIMEOUT = 300  # seconds
+STARTUP_TIMEOUT = 1800  # seconds — vLLM 0.19+ torch.compile + CUDA graph 캡처에 최대 30분
 
 
 class VLLMBackend(BaseBackend):
@@ -59,9 +60,19 @@ class VLLMBackend(BaseBackend):
             return "unknown"
 
     def load_model(self, model_id: str, gguf_path: str, context_window: int) -> None:
-        """vLLM 서버를 서브프로세스로 실행하거나 외부 서버에 연결."""
+        """vLLM 서버를 서브프로세스로 실행하거나 외부에서 이미 실행된 서버에 연결."""
         self._model_id = model_id
         self._context_window = context_window
+
+        # 외부 서버가 이미 떠있으면 그냥 연결 (Docker 등)
+        try:
+            r = httpx.get(f"{self.base_url}/health", timeout=5)
+            if r.status_code == 200:
+                self._proc = None
+                self._model_memory_gb = self._read_gpu_memory_gb()
+                return
+        except Exception:
+            pass
 
         parsed = urlparse(self.base_url)
         host = parsed.hostname or "127.0.0.1"
@@ -74,13 +85,17 @@ class VLLMBackend(BaseBackend):
             "--tensor-parallel-size", str(self.tensor_parallel_size),
             "--gpu-memory-utilization", str(self.gpu_memory_utilization),
             "--max-model-len", str(self.max_model_len or context_window),
-            "--disable-log-requests",
+            "--no-enable-log-requests",
+            "--no-enable-prefix-caching",     # prefix cache 비활성화 (cold prefill 측정)
         ]
         if self.quantization == "gguf":
             # GGUF 파일 직접 로드. tensor-parallel은 미지원 → tensor_parallel_size=1 권장.
             cmd += ["--load-format", "gguf"]
         elif self.quantization:
             cmd += ["--quantization", self.quantization]
+            # GPTQ/AWQ/GPTQ-Marlin은 float16 필요 (bfloat16 미지원)
+            if self.quantization in ("gptq", "gptq_marlin", "awq"):
+                cmd += ["--dtype", "half"]
         if self.cpu_offload_gb > 0:
             # VRAM 초과 모델을 CPU RAM으로 오프로드.
             # 3090 2-WAY (48GB) + 122B Q4 (~65GB): --cpu-offload-gb 20 권장.
@@ -88,15 +103,27 @@ class VLLMBackend(BaseBackend):
         if self.extra_args:
             cmd.extend(self.extra_args)
 
+        self._server_log = open("/tmp/vllm_server.log", "w")
+        # CUDA 라이브러리 경로 보장 (DGX Spark CUDA 13 + vLLM CUDA 12 호환)
+        env = dict(os.environ)
+        cuda_paths = "/usr/local/cuda/targets/sbsa-linux/lib:/usr/local/cuda/lib64:/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu"
+        env["LD_LIBRARY_PATH"] = cuda_paths + ":" + env.get("LD_LIBRARY_PATH", "")
         self._proc = subprocess.Popen(
             cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=self._server_log,
+            stderr=self._server_log,
+            env=env,
         )
 
         # 서버 준비 대기
         deadline = time.time() + STARTUP_TIMEOUT
         while time.time() < deadline:
+            # 프로세스가 이미 죽었으면 즉시 실패
+            if self._proc.poll() is not None:
+                self._server_log.close()
+                with open("/tmp/vllm_server.log") as f:
+                    tail = f.read()[-500:]
+                raise RuntimeError(f"vLLM server exited (code={self._proc.returncode}): {tail}")
             try:
                 r = httpx.get(f"{self.base_url}/health", timeout=3)
                 if r.status_code == 200:
@@ -136,6 +163,10 @@ class VLLMBackend(BaseBackend):
         except Exception:
             return 0.0
 
+    def get_effective_context(self) -> int:
+        """vLLM은 max_model_len이 실제 제약."""
+        return self.max_model_len or self._context_window
+
     def get_model_memory_gb(self) -> float:
         return getattr(self, "_model_memory_gb", 0.0)
 
@@ -151,6 +182,9 @@ class VLLMBackend(BaseBackend):
             except subprocess.TimeoutExpired:
                 self._proc.kill()
             self._proc = None
+        if hasattr(self, "_server_log") and self._server_log:
+            self._server_log.close()
+            self._server_log = None
 
     def generate(
         self,
@@ -178,7 +212,7 @@ class VLLMBackend(BaseBackend):
         output_tokens = 0
         token_count = 0  # stream_options 미지원 시 count 기반 폴백
 
-        with httpx.Client(timeout=600) as client:
+        with httpx.Client(timeout=1800) as client:  # gen-8192 + 큰 모델: 최대 30분
             with client.stream("POST", f"{self.base_url}/v1/completions", json=payload) as resp:
                 resp.raise_for_status()
                 for line in resp.iter_lines():

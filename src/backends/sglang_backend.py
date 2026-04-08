@@ -9,6 +9,7 @@ API: OpenAI-compatible /v1/completions (vLLM과 동일 포맷).
 GPTQ / AWQ / FP8 / BF16 지원.
 """
 import json
+import sys
 import time
 import subprocess
 from urllib.parse import urlparse
@@ -17,7 +18,7 @@ from typing import Optional
 
 from .base import BaseBackend, GenerateResult
 
-STARTUP_TIMEOUT = 300  # seconds
+STARTUP_TIMEOUT = 1800  # seconds — 대형 모델 로드 + 컴파일에 최대 30분
 
 
 class SGLangBackend(BaseBackend):
@@ -49,14 +50,14 @@ class SGLangBackend(BaseBackend):
     def get_version(self) -> str:
         try:
             out = subprocess.check_output(
-                ["python", "-m", "sglang.version"],
+                [sys.executable, "-m", "sglang.version"],
                 text=True, stderr=subprocess.DEVNULL,
             )
             return out.strip()
         except Exception:
             try:
                 out = subprocess.check_output(
-                    ["python", "-c", "import sglang; print(sglang.__version__)"],
+                    [sys.executable, "-c", "import sglang; print(sglang.__version__)"],
                     text=True, stderr=subprocess.DEVNULL,
                 )
                 return out.strip()
@@ -72,14 +73,14 @@ class SGLangBackend(BaseBackend):
         port = str(parsed.port or 30000)
 
         cmd = [
-            "python", "-m", "sglang.launch_server",
+            sys.executable, "-m", "sglang.launch_server",
             "--model-path", model_id,
             "--host", host,
             "--port", port,
             "--tp", str(self.tensor_parallel_size),
             "--context-length", str(self.max_model_len or context_window),
             "--mem-fraction-static", str(self.gpu_memory_utilization),
-            "--disable-log-requests",
+            "--disable-radix-cache",              # prefix cache 비활성화 (cold prefill)
         ]
         if self.quantization:
             cmd += ["--quantization", self.quantization]
@@ -88,14 +89,21 @@ class SGLangBackend(BaseBackend):
         if self.extra_args:
             cmd.extend(self.extra_args)
 
+        self._server_log = open("/tmp/sglang_server.log", "w")
         self._proc = subprocess.Popen(
             cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=self._server_log,
+            stderr=self._server_log,
         )
 
         deadline = time.time() + STARTUP_TIMEOUT
         while time.time() < deadline:
+            # 프로세스가 이미 죽었으면 즉시 실패
+            if self._proc.poll() is not None:
+                self._server_log.close()
+                with open("/tmp/sglang_server.log") as f:
+                    tail = f.read()[-500:]
+                raise RuntimeError(f"SGLang server exited (code={self._proc.returncode}): {tail}")
             try:
                 r = httpx.get(f"{self.base_url}/health", timeout=3)
                 if r.status_code == 200:
@@ -118,6 +126,9 @@ class SGLangBackend(BaseBackend):
         except Exception:
             return 0.0
 
+    def get_effective_context(self) -> int:
+        return self.max_model_len or self._context_window
+
     def get_model_memory_gb(self) -> float:
         return self._model_memory_gb
 
@@ -133,6 +144,9 @@ class SGLangBackend(BaseBackend):
             except subprocess.TimeoutExpired:
                 self._proc.kill()
             self._proc = None
+        if hasattr(self, "_server_log") and self._server_log:
+            self._server_log.close()
+            self._server_log = None
 
     def generate(
         self,

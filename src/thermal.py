@@ -170,6 +170,19 @@ def get_cpu_temp_celsius() -> Optional[float]:
     return None
 
 
+def get_gpu_temp_celsius() -> Optional[float]:
+    """NVIDIA GPU 최대 온도 반환 (°C). nvidia-smi 없거나 GPU 없으면 None."""
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"],
+            text=True, stderr=subprocess.DEVNULL, timeout=5,
+        )
+        temps = [float(l.strip()) for l in out.strip().splitlines() if l.strip()]
+        return max(temps) if temps else None
+    except Exception:
+        return None
+
+
 def get_thermal_pressure_level() -> Optional[str]:
     """macOS 전용 pressure level 반환. 비macOS는 None."""
     if platform.system() == "Darwin":
@@ -183,14 +196,22 @@ def wait_for_cooldown(
     cooldown_wait: int,
     console=None,
 ) -> None:
-    """온도가 max_temp 이하가 될 때까지 대기."""
+    """CPU/GPU 온도가 모두 max_temp 이하가 될 때까지 대기."""
     while True:
-        temp = get_cpu_temp_celsius()
-        if temp is None:
+        cpu_temp = get_cpu_temp_celsius()
+        gpu_temp = get_gpu_temp_celsius()
+
+        # 측정 가능한 온도 중 최댓값
+        temps = {k: v for k, v in {"CPU": cpu_temp, "GPU": gpu_temp}.items() if v is not None}
+        if not temps:
             return  # 측정 불가 시 통과
-        if temp <= max_temp:
+
+        hottest_label, hottest = max(temps.items(), key=lambda x: x[1])
+        if hottest <= max_temp:
             return
-        msg = f"[yellow]CPU {temp:.0f}°C > {max_temp:.0f}°C — {cooldown_wait}s 쿨다운 대기...[/yellow]"
+
+        parts = " / ".join(f"{label} {t:.0f}°C" for label, t in temps.items())
+        msg = f"[yellow]{parts} — {hottest_label} {hottest:.0f}°C > {max_temp:.0f}°C, {cooldown_wait}s 쿨다운 대기...[/yellow]"
         if console:
             console.print(msg)
         else:
@@ -201,11 +222,13 @@ def wait_for_cooldown(
 def log_temp() -> dict:
     """현재 온도 및 가용성 반환."""
     temp = get_cpu_temp_celsius()
+    gpu_temp = get_gpu_temp_celsius()
     pressure = get_thermal_pressure_level()  # macOS only, else None
     return {
         "cpu_temp_celsius": temp,
+        "gpu_temp_celsius": gpu_temp,
         "pressure_level": pressure,
-        "temp_available": temp is not None,
+        "temp_available": temp is not None or gpu_temp is not None,
     }
 
 

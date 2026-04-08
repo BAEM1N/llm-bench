@@ -133,6 +133,25 @@ mac)
     if want_model "122b"; then
       hf_download "unsloth/Qwen3.5-122B-A10B-GGUF" "Qwen3.5-122B-A10B-Q4_K_M-*.gguf" "$GGUF_DIR/unsloth/Qwen3.5-122B-A10B-GGUF"
     fi
+
+    # ── Gemma 4 GGUF ──
+    info "--- Gemma 4 GGUF ---"
+    if want_model "gemma4-e2b"; then
+      hf_download "unsloth/gemma-4-E2B-it-GGUF" "gemma-4-E2B-it-Q4_K_M.gguf" "$GGUF_DIR/unsloth/gemma-4-E2B-it-GGUF"
+      hf_download "unsloth/gemma-4-E2B-it-GGUF" "gemma-4-E2B-it-Q8_0.gguf"   "$GGUF_DIR/unsloth/gemma-4-E2B-it-GGUF"
+    fi
+    if want_model "gemma4-e4b"; then
+      hf_download "unsloth/gemma-4-E4B-it-GGUF" "gemma-4-E4B-it-Q4_K_M.gguf" "$GGUF_DIR/unsloth/gemma-4-E4B-it-GGUF"
+      hf_download "unsloth/gemma-4-E4B-it-GGUF" "gemma-4-E4B-it-Q8_0.gguf"   "$GGUF_DIR/unsloth/gemma-4-E4B-it-GGUF"
+    fi
+    if want_model "gemma4-26b"; then
+      hf_download "unsloth/gemma-4-26B-A4B-it-GGUF" "gemma-4-26B-A4B-it-UD-Q4_K_M.gguf" "$GGUF_DIR/unsloth/gemma-4-26B-A4B-it-GGUF"
+      hf_download "unsloth/gemma-4-26B-A4B-it-GGUF" "gemma-4-26B-A4B-it-Q8_0.gguf"      "$GGUF_DIR/unsloth/gemma-4-26B-A4B-it-GGUF"
+    fi
+    if want_model "gemma4-31b"; then
+      hf_download "unsloth/gemma-4-31B-it-GGUF" "gemma-4-31B-it-Q4_K_M.gguf" "$GGUF_DIR/unsloth/gemma-4-31B-it-GGUF"
+      hf_download "unsloth/gemma-4-31B-it-GGUF" "gemma-4-31B-it-Q8_0.gguf"   "$GGUF_DIR/unsloth/gemma-4-31B-it-GGUF"
+    fi
   fi
 
   # ── MLX ──
@@ -156,6 +175,23 @@ mac)
     if want_model "122b"; then
       hf_download "mlx-community/Qwen3.5-122B-A10B-4bit" "" "$MLX_DIR/Qwen3.5-122B-A10B-4bit"
     fi
+
+    # ── Gemma 4 MLX (unsloth 기반) ──
+    info "--- Gemma 4 MLX ---"
+    if want_model "gemma4-e2b"; then
+      hf_download "unsloth/gemma-4-E2B-it-UD-MLX-4bit" "" "$MLX_DIR/gemma-4-E2B-it-UD-MLX-4bit"
+      hf_download "unsloth/gemma-4-E2B-it-MLX-8bit"    "" "$MLX_DIR/gemma-4-E2B-it-MLX-8bit"
+    fi
+    if want_model "gemma4-e4b"; then
+      hf_download "unsloth/gemma-4-E4B-it-UD-MLX-4bit" "" "$MLX_DIR/gemma-4-E4B-it-UD-MLX-4bit"
+      hf_download "unsloth/gemma-4-E4B-it-MLX-8bit"    "" "$MLX_DIR/gemma-4-E4B-it-MLX-8bit"
+    fi
+    if want_model "gemma4-26b"; then
+      # 26B-A4B: unsloth MLX 미제공 → mlx-community 사용
+      hf_download "mlx-community/gemma-4-26b-a4b-it-4bit" "" "$MLX_DIR/gemma-4-26b-a4b-it-4bit"
+      hf_download "mlx-community/gemma-4-26b-a4b-it-8bit" "" "$MLX_DIR/gemma-4-26b-a4b-it-8bit"
+    fi
+    # gemma4-31b MLX: unsloth/mlx-community 모두 미제공 → 추후 추가
   fi
 
   # ── Ollama ──
@@ -167,6 +203,7 @@ mac)
     want_model "27b"  && ollama pull qwen3.5:27b-q4_K_M && ollama pull qwen3.5:27b-q8_0
     want_model "35b"  && ollama pull qwen3.5:35b-a3b-q4_K_M && ollama pull qwen3.5:35b-a3b-q8_0
     want_model "122b" && ollama pull qwen3.5:122b-a10b-q4_K_M
+    # Gemma 4 Ollama: 아직 공식 태그 미확인. 추가되면 여기에 pull 명령 추가.
   fi
 
   success "mac 다운로드 완료"

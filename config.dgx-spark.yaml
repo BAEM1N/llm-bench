@@ -1,0 +1,184 @@
+# DGX Spark — Full benchmark config (v2, fresh run)
+# GB10 Grace Blackwell SoC, 128GB unified memory
+# CRITICAL: context_window=65536 to prevent KV cache OOM
+
+comparison_mode: A
+
+generation:
+  temperature: 0
+  top_p: 1.0
+  repeat_penalty: 1.0
+  context_window: 65536  # 64K — KV cache OOM 방지 (262144 사용 금지)
+
+benchmark:
+  warmup_runs: 1
+  measure_runs: 5
+  inter_run_sleep: 5
+  inter_track_sleep: 60
+  inter_model_sleep: 120
+  inter_backend_sleep: 60
+
+thermal:
+  enabled: true
+  max_temp_celsius: 85
+  check_interval: 10
+  cooldown_wait: 60
+  log_temp: true
+
+hardware:
+  id: "dgx-spark"
+  description: "NVIDIA DGX Spark (GB10 Grace Blackwell), 128GB unified memory"
+
+# ─── Generation Tracks ───
+generation_tracks:
+  - id: "gen-512"
+    max_tokens: 512
+    input_tokens: 64
+  - id: "gen-2048"
+    max_tokens: 2048
+    input_tokens: 64
+  - id: "gen-4096"
+    max_tokens: 4096
+    input_tokens: 64
+  - id: "gen-8192"
+    max_tokens: 8192
+    input_tokens: 64
+
+# ─── Prefill Tracks ───
+# prefill-128k skipped: 131072 + 10 > 65536 context_window
+prefill_tracks:
+  - id: "prefill-1k"
+    max_tokens: 10
+    input_tokens: 1024
+  - id: "prefill-4k"
+    max_tokens: 10
+    input_tokens: 4096
+  - id: "prefill-16k"
+    max_tokens: 10
+    input_tokens: 16384
+
+backends:
+  llamacpp:
+    enabled: true
+    base_url: "http://localhost:8080"
+    binary: /home/baeumai/llama.cpp/build-gpu/bin/llama-server
+    n_gpu_layers: 99
+    flash_attn: true
+    batch_size: 512
+    ubatch_size: 512
+    threads: null
+    threads_batch: null
+    mlock: false
+    extra_args: []
+
+  ollama:
+    enabled: true
+    base_url: "http://localhost:11434"
+
+  vllm:
+    enabled: true
+    base_url: "http://localhost:8000"
+    binary: /home/baeumai/llm-bench/.venv/bin/vllm
+    tensor_parallel_size: 1
+    gpu_memory_utilization: 0.90
+    max_model_len: 65536
+    cpu_offload_gb: 0
+    extra_args: []
+
+  # Disabled backends
+  lmstudio:
+    enabled: false
+    base_url: "http://localhost:1234"
+  mlx:
+    enabled: false
+  sglang:
+    enabled: false
+    base_url: "http://localhost:30000"
+  lemonade:
+    enabled: false
+    base_url: "http://localhost:8000"
+
+models:
+  - id: "qwen3.5-9b"
+    architecture: "dense"
+    total_params: "9B"
+    active_params: "9B"
+    context_window: 262144
+    quantizations:
+      - name: "Q4_K_M"
+        gguf_path: "~/models/gguf/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q4_K_M.gguf"
+        lmstudio_model: ""
+        ollama_model: "qwen3.5:9b-q4_K_M"
+        mlx_model: ""
+        lemonade_model: ""
+        vllm_model: "Qwen/Qwen3.5-9B"
+        vllm_quantization: null
+      - name: "Q8_0"
+        gguf_path: "~/models/gguf/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q8_0.gguf"
+        lmstudio_model: ""
+        ollama_model: "qwen3.5:9b-q8_0"
+        mlx_model: ""
+        lemonade_model: ""
+        vllm_model: "Qwen/Qwen3.5-9B"
+        vllm_quantization: null
+
+  - id: "qwen3.5-27b"
+    architecture: "dense"
+    total_params: "27B"
+    active_params: "27B"
+    context_window: 262144
+    quantizations:
+      - name: "Q4_K_M"
+        gguf_path: "~/models/gguf/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q4_K_M.gguf"
+        lmstudio_model: ""
+        ollama_model: "qwen3.5:27b-q4_K_M"
+        mlx_model: ""
+        lemonade_model: ""
+        vllm_model: "Qwen/Qwen3.5-27B-GPTQ-Int4"
+        vllm_quantization: "gptq"
+      - name: "Q8_0"
+        gguf_path: "~/models/gguf/Qwen3.5-27B-GGUF/Qwen3.5-27B-Q8_0.gguf"
+        lmstudio_model: ""
+        ollama_model: "qwen3.5:27b-q8_0"
+        mlx_model: ""
+        lemonade_model: ""
+        vllm_model: "Qwen/Qwen3.5-27B"
+        vllm_quantization: null
+
+  - id: "qwen3.5-35b-a3b"
+    architecture: "moe"
+    total_params: "35B"
+    active_params: "3B"
+    context_window: 262144
+    quantizations:
+      - name: "Q4_K_M"
+        gguf_path: "~/models/gguf/Qwen3.5-35B-A3B-GGUF/Qwen3.5-35B-A3B-Q4_K_M.gguf"
+        lmstudio_model: ""
+        ollama_model: "qwen3.5:35b-a3b-q4_K_M"
+        mlx_model: ""
+        lemonade_model: ""
+        vllm_model: "Qwen/Qwen3.5-35B-A3B-GPTQ-Int4"
+        vllm_quantization: "gptq"
+      - name: "Q8_0"
+        gguf_path: "~/models/gguf/Qwen3.5-35B-A3B-GGUF/Qwen3.5-35B-A3B-Q8_0.gguf"
+        lmstudio_model: ""
+        ollama_model: "qwen3.5:35b-a3b-q8_0"
+        mlx_model: ""
+        lemonade_model: ""
+        vllm_model: "Qwen/Qwen3.5-35B-A3B"
+        vllm_quantization: null
+
+  - id: "qwen3.5-122b-a10b"
+    architecture: "moe"
+    total_params: "122B"
+    active_params: "10B"
+    context_window: 262144
+    quantizations:
+      - name: "Q4_K_M"
+        gguf_path: "~/models/gguf/Qwen3.5-122B-A10B-GGUF/Qwen3.5-122B-A10B-Q4_K_M-00001-of-00003.gguf"
+        lmstudio_model: ""
+        ollama_model: "qwen3.5:122b-a10b-q4_K_M"
+        mlx_model: ""
+        lemonade_model: ""
+        vllm_model: "Qwen/Qwen3.5-122B-A10B-GPTQ-Int4"
+        vllm_quantization: "gptq"

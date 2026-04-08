@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
 
 
 @dataclass
@@ -35,6 +34,10 @@ class BaseBackend(ABC):
         repeat_penalty: float,
     ) -> GenerateResult:
         """추론 실행 및 타이밍 측정."""
+
+    def get_effective_context(self) -> int:
+        """실제 처리 가능한 최대 컨텍스트 길이. 백엔드별 제약 반영."""
+        return getattr(self, "_context_window", 262144)
 
     def get_model_memory_gb(self) -> float:
         """모델 로드 후 점유 메모리 반환 (GB). 측정 불가 시 0.0."""

@@ -101,7 +101,7 @@ class OllamaBackend(BaseBackend):
         prompt_eval_duration_ns = 0
         eval_duration_ns = 0
 
-        with httpx.Client(timeout=300) as client:
+        with httpx.Client(timeout=1800) as client:
             with client.stream("POST", f"{self.base_url}/api/generate", json=payload) as resp:
                 for line in resp.iter_lines():
                     if not line:
