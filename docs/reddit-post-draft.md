@@ -91,3 +91,29 @@ Benchmark tool + all raw CSV data (5,100 runs): https://github.com/baem1n/llm-be
 ---
 
 Anyone else running Qwen3.5 on these platforms? Especially curious about 4090/5080 single-GPU numbers for the 35B MoE — would love to add those to the comparison.
+
+---
+
+## 게시 전 체크리스트
+
+### 필수
+- [ ] Mac Ollama 잔여 실험 완료 후 데이터 업데이트 (9B Q4, 27B Q8, 122B Q8 남음)
+- [ ] 블로그 포스트에 Mac Ollama 결과 반영 (현재 `—` 표시된 셀들)
+- [ ] README 데이터도 동기화
+- [ ] 영문 블로그 포스트 작성 or 영문 요약 추가 (/en/ 경로)
+
+### 권장
+- [ ] 블로그 포스트에 answer block 추가 (테이블 앞에 1-2문장 요약 — AI 인용성 개선)
+- [ ] 블로그 포스트에 질문형 헤딩 추가 ("Which hardware runs Qwen3.5 fastest?")
+- [ ] 프라이버시 폴리시 페이지 추가
+- [ ] 저자 프로필 사진 추가 (Person schema image)
+
+### 게시 타이밍
+- [ ] 화-목 오전 9-11 AM ET (한국시간 밤 10-12시)
+- [ ] 게시 직후 30분간 댓글 모니터링 (첫 반응이 Reddit 알고리즘에 critical)
+
+### 게시 후 팔로업
+- [ ] 인기 댓글에 24시간 내 답변 (특히 "can you test X?" 요청)
+- [ ] 요청된 추가 실험 → GitHub issue로 전환
+- [ ] 1주 후 팔로업 포스트 고려 ("Follow-up: community-requested experiments")
+- [ ] 동일 내용 Hacker News 제출 (Show HN 포맷, Reddit 반응 확인 후)
