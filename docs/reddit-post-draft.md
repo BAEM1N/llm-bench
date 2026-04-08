@@ -90,7 +90,7 @@ I did this because I genuinely needed to know which machine to use for what, and
 
 **If there's a specific model, quantization, or metric you'd like tested on any of this hardware** — [open a GitHub issue](https://github.com/baem1n/llm-bench/issues/new?template=experiment_request.md) and I'll run it. Things like different context lengths, other model families, Q3/Q5/Q6 quants, whatever. This measures single-stream inference throughput (gen tok/s, prefill tok/s, TTFT) — not quality or accuracy.
 
-If you have **128GB+ unified memory hardware** (M4 Ultra, Mac Studio, or similar) and want to contribute results — especially prefill throughput at longer contexts (64K/128K) — PRs to the repo are very welcome. The benchmark tool handles everything automatically, you'd just need to run it and submit the CSV.
+If you have **128GB+ unified memory hardware** (M4 Ultra, Mac Studio, or similar) and want to contribute results — especially prefill throughput at longer contexts (64K/128K) — PRs to the repo are very welcome.
 
 ---
 
