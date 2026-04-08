@@ -2,97 +2,92 @@
 
 > Flair: Discussion
 > 게시 타이밍: 화-목 오전 9-11 AM ET (한국시간 밤 10시-새벽 12시)
+> 차별점: 기존 리뷰(Tom's Hardware, NotebookCheck)는 1:1 비교 + quick run. 우리는 4개 플랫폼 × 5개 엔진 × 5,100회 통제 측정.
 
 ---
 
-## Title Options (pick one)
+## Title
 
-**Option A** (surprising finding lead):
-> I benchmarked Qwen3.5 (9B→122B) across 4 unified-memory platforms. The 35B MoE is faster than the 9B Dense on every single one.
-
-**Option B** (hardware comparison lead):
-> Apple Silicon vs DGX Spark vs Ryzen AI MAX 395 vs RTX 3090x2: 5,100 Qwen3.5 benchmark runs across 5 engines
-
-**Option C** (practical angle):
-> Ran 5,100 benchmarks comparing Qwen3.5 on 4 platforms with 5 backends. Here's which hardware actually matters for local inference.
+> I bought 3 unified-memory machines (M5 Max / DGX Spark / Ryzen AI MAX 395) to compare local inference. Added my 3090×2 as a discrete VRAM baseline. 5,100 runs later, here's what I found.
 
 ---
 
 ## Post Body
 
-I wanted to answer a simple question: if you have ~$2-5K to spend on local LLM inference, which hardware actually gives you the best tok/s?
+I've seen plenty of reviews comparing DGX Spark vs Strix Halo or Mac vs everything else, but they're usually single-model quick runs without controlling for caching, backend differences, or prompt variation. I wanted proper apples-to-apples numbers.
 
-So I ran Qwen3.5 (9B, 27B, 35B-A3B MoE, 122B-A10B MoE) on 4 platforms with 5 backends. ~5,100 total measurements, 4,200 valid after outlier filtering (CV<0.3). Every run uses cold prefill — no cache, no prompt reuse, per-run random nonce, server restart between prefill tracks.
+So I bought all three 128GB unified-memory machines — MacBook Pro M5 Max, NVIDIA DGX Spark (GB10), and HP Z2 Mini G1a (Ryzen AI MAX+ PRO 395) — and added my existing RTX 3090×2 rig as a discrete VRAM baseline. Ran Qwen3.5 (9B, 27B, 35B-A3B, 122B-A10B) across 5 backends (llama.cpp, MLX, Ollama, vLLM, Lemonade).
 
-### Hardware
+~5,100 total runs, ~4,200 valid after filtering (CV<0.3 per 5-run set). Cold prefill on every run — `--no-cache-prompt`, random nonce prefix, server restart between prefill tracks. No warm cache tricks.
 
-| | M5 Max 128GB | RTX 3090×2 48GB | DGX Spark GB10 128GB | Ryzen AI MAX 395 96GB |
-|--|:--:|:--:|:--:|:--:|
-| Memory BW | 546 GB/s | ~936 GB/s | 273 GB/s | 256 GB/s |
-| Architecture | Unified | Discrete VRAM | Unified | Unified (iGPU) |
+### The machines
 
-### Generation Speed (llama.cpp, same GGUF, Q4_K_M, gen-512)
+| | M5 Max | 3090×2 | DGX Spark | Ryzen AI 395 |
+|--|--:|--:|--:|--:|
+| Memory | 128GB unified | 48GB VRAM + 128GB DDR4 | 128GB unified | 96GB VRAM (unified) |
+| Bandwidth | 546 GB/s | ~936 GB/s | 273 GB/s | 256 GB/s |
+
+### Generation tok/s (llama.cpp, same GGUF, Q4_K_M)
 
 | Model | M5 Max | 3090×2 | DGX Spark | Ryzen AI |
 |-------|------:|------:|------:|------:|
 | **9B** Dense | 75.9 | **117.6** | 36.8 | 32.6 |
 | **27B** Dense | 24.8 | **41.4** | 11.5 | 10.3 |
 | **35B-A3B** MoE | 94.1 | **138.9** | 59.6 | 58.0 |
-| **122B-A10B** MoE | 42.9 | OOM | 21.7 | 22.9 |
+| **122B** MoE | **42.9** | OOM | 21.7 | 22.9 |
 
-### The MoE surprise
+The 3090 is fastest when the model fits in 48GB. Once it doesn't, game over — can't even load 122B.
 
-35B-A3B MoE (only 3B active params) is **faster than 9B Dense on every platform**:
+### The MoE thing nobody talks about
 
-| Hardware | 9B Dense | 35B MoE | Speedup |
-|---------|------:|------:|------:|
+35B-A3B only activates ~3B params per token. That means it's **faster than the 9B Dense** on every single platform:
+
+| | 9B Dense | 35B MoE | Delta |
+|--|------:|------:|------:|
 | M5 Max | 75.9 | **94.1** | +24% |
 | 3090×2 | 117.6 | **138.9** | +18% |
 | DGX Spark | 36.8 | **59.6** | +62% |
 | Ryzen AI | 32.6 | **58.0** | +78% |
 
-The speedup is most dramatic on the lower-bandwidth platforms (DGX Spark, Ryzen AI) — makes sense since MoE only loads ~3B weights per token vs 9B for the dense model.
+The lower your bandwidth, the bigger the MoE advantage. DGX Spark and Ryzen AI see +62-78% because they're bandwidth-starved — loading 3B instead of 9B per token makes a massive difference there.
 
-### Engine comparison (gen-512, Q4_K_M)
+### Best engine per platform
 
-On the 3090×2, vLLM GPTQ-Marlin hit **156.3 tok/s** on the 35B MoE — fastest single result across the entire benchmark. But for most models, llama.cpp wins:
+| Platform | Winner | 9B | 35B MoE |
+|----------|--------|----:|--------:|
+| Mac | MLX | **102.4** | **138.3** |
+| 3090×2 | vLLM (GPTQ) | 83.6 | **156.3** |
+| DGX Spark | llama.cpp | **35.7** | **61.2** |
+| Ryzen AI | llama.cpp | **36.2** | **58.4** |
 
-| Platform | Best Engine | 9B | 27B | 35B MoE |
-|----------|-----------|----:|----:|--------:|
-| Mac | MLX | **102.4** | 28.8 | **138.3** |
-| 3090×2 | llama.cpp/vLLM | 117.3 | 41.5 | **156.3** (vLLM) |
-| DGX Spark | llama.cpp | 35.7 | 11.5 | 61.2 |
-| Ryzen AI | llama.cpp | 36.2 | 12.3 | 58.4 |
+vLLM with GPTQ-Marlin on the 3090 hit **156.3 tok/s** for 35B MoE — the single fastest result in the entire benchmark. But llama.cpp is the most consistent winner across all platforms.
 
-### 122B on a $2K mini PC
+### 122B on a mini PC
 
-The Ryzen AI MAX 395 (HP Z2 Mini G1a) runs 122B-A10B MoE at **22.9 tok/s** — usable for real work. DGX Spark is similar at 21.7. The 3090×2 can't even load it (48GB VRAM, 122B GPTQ is ~65GB).
+The $2K HP Z2 Mini (Ryzen AI MAX 395) runs 122B-A10B at **22.9 tok/s**. DGX Spark does 21.7. Both are genuinely usable. The 3090×2 can't even load it.
 
-M5 Max leads 122B at **42.9 tok/s** — 128GB unified memory + 546 GB/s bandwidth wins for the biggest models.
+M5 Max leads at **42.9 tok/s** — 546 GB/s bandwidth wins for the biggest models.
 
-### Key takeaways
+### DGX Spark vs Ryzen AI: surprisingly close
 
-- **Memory bandwidth is king.** 3090×2 at 936 GB/s dominates everything that fits in VRAM. Once you exceed VRAM → it falls apart
-- **MoE models flip the rankings.** 35B-A3B MoE is 18-78% faster than 9B Dense despite being "bigger" — the active parameter count matters more than total params
-- **Unified memory platforms run everything.** Mac/DGX/Ryzen all run 122B. The 3090 can't
-- **DGX Spark and Ryzen AI MAX 395 are surprisingly close.** Despite very different architectures (Blackwell vs Strix Halo RDNA 3.5), gen TPS is within 10-15% on most models
-- **llama.cpp is the universal winner** for generation speed (except MLX on Mac, vLLM GPTQ on 3090)
+Despite completely different architectures (Blackwell GB10 vs Strix Halo RDNA 3.5), gen TPS is within 10-15% on most models. Both have ~128GB unified memory, both are bandwidth-limited at ~256-273 GB/s. Tom's Hardware and NotebookCheck benchmarks showed similar results — but with single runs, not 5,100 controlled measurements.
+
+### What I'd buy
+
+- **Already have a beefy GPU (4090/3090)?** Keep it. Fastest for anything that fits in VRAM
+- **Want to run 70B+ daily?** M5 Max if you can afford it, Ryzen AI MAX 395 if budget matters
+- **DGX Spark?** Cool hardware, but the Ryzen AI delivers ~90% of the performance for less money
 
 ### Methodology
 
-- 5 runs per combo, median
-- Warmup 1 (separate prompt) + measure 5
-- `--no-cache-prompt`, `--slot-prompt-similarity 0`, per-run random nonce prefix
-- Server restart between prefill tracks
-- Thermal guard: 85°C → 60s cooldown
-- Randomized backend/model/track order
+5 runs × median, warmup with separate prompt, `--no-cache-prompt`, `--slot-prompt-similarity 0`, random nonce per run, server restart between prefill tracks, 85°C thermal guard with 60s cooldown, randomized execution order.
 
-Full write-up with prefill data, Q8_0 results, and methodology deep-dive: [blog link]
+Full results (prefill, Q8_0, engine comparisons): https://baem1n.dev/posts/llm-bench-03-results-tables/
 
-Open-source benchmark tool + raw CSV data: [repo link]
+Benchmark tool + all raw CSV data (5,100 runs): https://github.com/baem1n/llm-bench
 
-**Want me to run a specific benchmark on this hardware?** Open a [GitHub issue](https://github.com/baem1n/llm-bench/issues) with the model/quant/track you want tested and I'll run it. Just keep in mind this tool measures single-stream inference speed under controlled conditions — it's not a general-purpose quality or accuracy eval, just raw throughput on specific hardware.
+**Want a specific model/quant tested on this hardware?** [Open a GitHub issue](https://github.com/baem1n/llm-bench/issues/new?template=experiment_request.md) — I'll run it. Note: this measures single-stream inference throughput only, not quality or accuracy.
 
 ---
 
-What are you running Qwen3.5 on? Curious how the 35B MoE performs on single-GPU setups (4090, 5080) — if anyone has numbers I'd love to compare.
+Anyone else running Qwen3.5 on these platforms? Especially curious about 4090/5080 single-GPU numbers for the 35B MoE — would love to add those to the comparison.
