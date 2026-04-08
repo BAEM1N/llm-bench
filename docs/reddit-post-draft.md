@@ -14,7 +14,7 @@
 
 ## Post Body
 
-I recently picked up three unified-memory machines for different parts of my workflow — M5 Max as my portable daily driver, DGX Spark for fine-tuning LLM/embedding models before renting cloud GPUs, and the HP Z2 Mini (Ryzen AI MAX 395) as a dedicated inference server running llama.cpp for embeddings, reranking, and LLM serving. I already had a 3090×2 rig sitting around, so I figured: why not benchmark all of them under the same controlled conditions and share the results?
+I recently picked up three unified-memory machines for different parts of my workflow — M5 Max as my primary dev machine, DGX Spark for fine-tuning LLM/embedding models before renting cloud GPUs, and the HP Z2 Mini (Ryzen AI MAX 395) as a dedicated inference server running llama.cpp for embeddings, reranking, and LLM serving. I already had a 3090×2 rig sitting around, so I figured: why not benchmark all of them under the same controlled conditions and share the results?
 
 Most reviews I've seen compare these machines in pairs (DGX Spark vs Strix Halo, Mac vs everything else), and they're usually single-model quick runs without controlling for caching or prompt variation. I wanted proper apples-to-apples numbers across all four platforms with multiple engines.
 
