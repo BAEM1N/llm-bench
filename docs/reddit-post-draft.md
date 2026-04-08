@@ -14,11 +14,11 @@
 
 ## Post Body
 
-I've seen plenty of reviews comparing DGX Spark vs Strix Halo or Mac vs everything else, but they're usually single-model quick runs without controlling for caching, backend differences, or prompt variation. I wanted proper apples-to-apples numbers.
+I recently picked up three unified-memory machines for different parts of my workflow — M5 Max as my portable daily driver, DGX Spark for fine-tuning LLM/embedding models before renting cloud GPUs, and the HP Z2 Mini (Ryzen AI MAX 395) as a dedicated inference server running llama.cpp for embeddings, reranking, and LLM serving. I already had a 3090×2 rig sitting around, so I figured: why not benchmark all of them under the same controlled conditions and share the results?
 
-So I bought all three 128GB unified-memory machines — MacBook Pro M5 Max, NVIDIA DGX Spark (GB10), and HP Z2 Mini G1a (Ryzen AI MAX+ PRO 395) — and added my existing RTX 3090×2 rig as a discrete VRAM baseline. Ran Qwen3.5 (9B, 27B, 35B-A3B, 122B-A10B) across 5 backends (llama.cpp, MLX, Ollama, vLLM, Lemonade).
+Most reviews I've seen compare these machines in pairs (DGX Spark vs Strix Halo, Mac vs everything else), and they're usually single-model quick runs without controlling for caching or prompt variation. I wanted proper apples-to-apples numbers across all four platforms with multiple engines.
 
-~5,100 total runs, ~4,200 valid after filtering (CV<0.3 per 5-run set). Cold prefill on every run — `--no-cache-prompt`, random nonce prefix, server restart between prefill tracks. No warm cache tricks.
+So I ran Qwen3.5 (9B, 27B, 35B-A3B, 122B-A10B) across 5 backends (llama.cpp, MLX, Ollama, vLLM, Lemonade). ~5,100 total runs, ~4,200 valid after filtering (CV<0.3 per 5-run set). Cold prefill on every run — `--no-cache-prompt`, random nonce prefix, server restart between prefill tracks. No warm cache tricks.
 
 ### The machines
 
@@ -86,11 +86,15 @@ Full results (prefill, Q8_0, engine comparisons): https://baem1n.dev/posts/llm-b
 
 Benchmark tool + all raw CSV data (5,100 runs): https://github.com/baem1n/llm-bench
 
-**Want a specific model/quant tested on this hardware?** [Open a GitHub issue](https://github.com/baem1n/llm-bench/issues/new?template=experiment_request.md) — I'll run it. Note: this measures single-stream inference throughput only, not quality or accuracy.
+I did this because I genuinely needed to know which machine to use for what, and I figured the data might help others making similar decisions. Hope it's useful.
+
+**If there's a specific model, quantization, or metric you'd like tested on any of this hardware** — [open a GitHub issue](https://github.com/baem1n/llm-bench/issues/new?template=experiment_request.md) and I'll run it. Things like different context lengths, other model families, Q3/Q5/Q6 quants, whatever. This measures single-stream inference throughput (gen tok/s, prefill tok/s, TTFT) — not quality or accuracy.
+
+If you have **128GB+ unified memory hardware** (M4 Ultra, Mac Studio, or similar) and want to contribute results — especially prefill throughput at longer contexts (64K/128K) — PRs to the repo are very welcome. The benchmark tool handles everything automatically, you'd just need to run it and submit the CSV.
 
 ---
 
-Anyone else running Qwen3.5 on these platforms? Especially curious about 4090/5080 single-GPU numbers for the 35B MoE — would love to add those to the comparison.
+Anyone else running Qwen3.5 locally? Curious about 4090/5080 single-GPU numbers for the 35B MoE, or how the M4 Ultra stacks up on prefill. Would love to expand the comparison.
 
 ---
 
