@@ -38,6 +38,17 @@ So I ran Qwen3.5 (9B, 27B, 35B-A3B, 122B-A10B) across 5 backends (llama.cpp, MLX
 
 The 3090 is fastest when the model fits in 48GB. Once it doesn't, game over — can't even load 122B.
 
+### Memory footprint & thermals (Q4_K_M, llama.cpp)
+
+| Model | Memory (Mac RSS) | Mac Temp | 3090 Temp | DGX Temp | Ryzen Temp |
+|-------|------:|------:|------:|------:|------:|
+| **9B** | 14.4 GB | 60°C | 71°C | 60°C | 50°C |
+| **27B** | 33.3 GB | 75°C | 74°C | 63°C | 55°C |
+| **35B-A3B** | 26.3 GB | 60°C | 68°C | 58°C | 54°C |
+| **122B** | 78.6 GB | 75°C | OOM | 65°C | 63°C |
+
+The MoE 35B uses less memory than the dense 27B (26 vs 33 GB) and runs cooler too. The Ryzen AI and DGX Spark stay remarkably cool in their mini PC form factors — the M5 Max and 3090 run noticeably hotter under sustained load, with 85°C thermal throttle kicking in on longer prefill runs.
+
 ### The MoE thing nobody talks about
 
 35B-A3B only activates ~3B params per token. That means it's **faster than the 9B Dense** on every single platform:
@@ -90,11 +101,11 @@ I did this because I genuinely needed to know which machine to use for what, and
 
 **If there's a specific model, quantization, or metric you'd like tested on any of this hardware** — [open a GitHub issue](https://github.com/baem1n/llm-bench/issues/new?template=experiment_request.md) and I'll run it. Things like different context lengths, other model families, Q3/Q5/Q6 quants, whatever. This measures single-stream inference throughput (gen tok/s, prefill tok/s, TTFT) — not quality or accuracy.
 
-If you have **128GB+ unified memory hardware** (M4 Ultra, Mac Studio, or similar) and want to contribute results — especially prefill throughput at longer contexts (64K/128K) — PRs to the repo are very welcome.
+If you have **128GB+ unified memory hardware** (M3 Ultra Mac Studio, or similar) and want to contribute results — especially prefill throughput at longer contexts (64K/128K) — PRs to the repo are very welcome.
 
 ---
 
-Anyone else running Qwen3.5 locally? Curious about 4090/5080 single-GPU numbers for the 35B MoE, or how the M4 Ultra stacks up on prefill. Would love to expand the comparison.
+Anyone else running Qwen3.5 locally? Curious about 4090/5080 single-GPU numbers for the 35B MoE, or how the M3 Ultra Mac Studio stacks up on prefill with that 800 GB/s bandwidth. Would love to expand the comparison.
 
 ---
 
