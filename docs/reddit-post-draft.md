@@ -38,17 +38,6 @@ So I ran Qwen3.5 (9B, 27B, 35B-A3B, 122B-A10B) across 5 backends (llama.cpp, MLX
 
 The 3090 is fastest when the model fits in 48GB. Once it doesn't, game over — can't even load 122B.
 
-### Memory footprint & thermals (Q4_K_M, llama.cpp)
-
-| Model | Memory (Mac RSS) | Mac Temp | 3090 Temp | DGX Temp | Ryzen Temp |
-|-------|------:|------:|------:|------:|------:|
-| **9B** | 14.4 GB | 60°C | 71°C | 60°C | 50°C |
-| **27B** | 33.3 GB | 75°C | 74°C | 63°C | 55°C |
-| **35B-A3B** | 26.3 GB | 60°C | 68°C | 58°C | 54°C |
-| **122B** | 78.6 GB | 75°C | OOM | 65°C | 63°C |
-
-The MoE 35B uses less memory than the dense 27B (26 vs 33 GB) and runs cooler too. The Ryzen AI and DGX Spark stay remarkably cool in their mini PC form factors — the M5 Max and 3090 run noticeably hotter under sustained load, with 85°C thermal throttle kicking in on longer prefill runs.
-
 ### The MoE thing nobody talks about
 
 35B-A3B only activates ~3B params per token. That means it's **faster than the 9B Dense** on every single platform:

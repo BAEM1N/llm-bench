@@ -120,9 +120,14 @@ KV Cache = 2 (K+V) × n_layers × n_kv_heads × head_dim × context_length × 2 
 | 35B-A3B Q4_K_M | 21.5G | 26.3G | +4.8G |
 | 122B Q4_K_M | 75.0G | 78.6G | +3.6G |
 
-> Mac RSS는 llama.cpp 프로세스 전체 메모리. 모델 웨이트 + KV cache + 작업 버퍼 + mmap 오버헤드 포함.
-> Dense 모델(9B, 27B)이 이론 대비 차이가 큰 건 mmap으로 OS 캐시에 올라간 부분 포함 가능.
-> MoE 모델(35B, 122B)은 이론값에 상대적으로 가까움.
+> **이론값이 실측보다 크다** — 이론 KV cache는 FP16(2 bytes) 기준이나, 벤치마크는
+> `--flash-attn on`으로 실행. Flash Attention은 KV cache를 Q8_0/Q4_0으로 양자화 저장하여
+> 실제 KV cache가 이론의 **1/2~1/4** 수준.
+>
+> `--no-mmap` 사용 중이므로 RSS = 실제 프로세스 메모리 (mmap 부풀림 없음).
+> context_window=262144 (256K)로 서버를 띄우므로 gen-512에서도 256K 분량 KV buffer가 startup 시 할당됨.
+>
+> **실측이 이론보다 작은 이유**: Flash Attention KV quantization + llama.cpp 내부 최적화.
 
 ---
 
