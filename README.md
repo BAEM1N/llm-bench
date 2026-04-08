@@ -1,13 +1,12 @@
-# LLM Bench — Qwen3.5 Cross-Platform Inference Benchmark
+# LLM Bench — Cross-Platform Local LLM Inference Benchmark
 
-4대 하드웨어 × 5개 엔진에서 Qwen3.5 모델의 **생성 속도(Gen TPS)**와 **프리필 속도(Prefill TPS)**를 동일 조건으로 측정.
+Controlled benchmark of Qwen3.5 models (9B / 27B / 35B-A3B MoE / 122B-A10B MoE) across **4 hardware platforms × 5 inference engines**.
 
-> **v3 실험 설계**: prompt cache 차단 (`--no-cache-prompt`), cold prefill (서버 재시작), 실행 순서 랜덤화, run별 nonce prefix.  
-> 각 조합 5회 측정 중앙값, CV<0.3 필터 적용. 총 **~5,100회** 측정.
+> **Methodology**: Cold prefill (`--no-cache-prompt`), per-run random nonce, server restart between prefill tracks, randomized execution order. 5 runs per combo, median. CV<0.3 outlier filter. **~5,100 total measurements**.
 
 ---
 
-## 생성 속도 (Track B — 동일 llama.cpp + 동일 GGUF)
+## Generation Speed (Track B — same llama.cpp, same GGUF)
 
 ### Q4_K_M (gen-512, tok/s)
 
@@ -28,7 +27,7 @@
 
 ---
 
-## 프리필 속도 (Track B — llama.cpp, Q4_K_M, tok/s)
+## Prefill Throughput (Track B — llama.cpp, Q4_K_M, tok/s)
 
 ### 9B
 
@@ -62,7 +61,9 @@
 
 ---
 
-## 엔진 비교 (Track A — gen-512, Q4_K_M, tok/s)
+## Engine Comparison (Track A — gen-512, Q4_K_M, tok/s)
+
+> Same hardware, different engines. Cross-platform comparison uses Track B above.
 
 ### M5 Max — MLX vs llama.cpp
 
@@ -80,16 +81,16 @@
 | 9B | 83.6 | **117.3** | 100.5 |
 | 27B | 19.3 | **41.5** | 36.7 |
 | 35B-A3B | **156.3** | 138.6 | 101.7 |
-| 122B | — | — | 4.7 🚫 |
+| 122B | N/A | OOM | 4.7 |
 
-### DGX Spark — llama.cpp vs Ollama vs vLLM Docker
+### DGX Spark — llama.cpp vs Ollama vs vLLM (Docker)
 
 | Model | llama.cpp | Ollama | vLLM Docker |
 |-------|----------:|-------:|------------:|
 | 9B | **35.7** | 35.1 | 12.9 |
 | 27B | **11.5** | 11.4 | 8.5 |
 | 35B-A3B | **61.2** | 59.2 | 34.8 |
-| 122B | **22.0** | 6.6 | — |
+| 122B | **22.0** | 6.6 | N/A |
 
 ### Ryzen AI MAX 395 — llama.cpp vs Ollama vs Lemonade
 
@@ -98,17 +99,17 @@
 | 9B | **36.2** | 31.9 | 33.2 |
 | 27B | **12.3** | 11.1 | 11.3 |
 | 35B-A3B | **58.4** | 43.9 | 48.0 |
-| 122B | **22.8** | 4.6 🚫 | — |
+| 122B | **22.8** | 4.6 | N/A |
 
 ---
 
-## 프리필 엔진 비교 (prefill-16k, Q4_K_M, tok/s)
+## Prefill Engine Comparison (prefill-16k, Q4_K_M, tok/s)
 
 | Engine × Hardware | 9B | 27B | 35B MoE | 122B |
 |-------------------|---:|----:|--------:|-----:|
-| **3090 vLLM** | 8,398 | 2,845 | **13,146** | — |
-| DGX vLLM Docker | 6,773 | 1,614 | 4,331 | — |
-| 3090 llama.cpp | 6,236 | 1,799 | 4,186 | — |
+| **3090 vLLM** | 8,398 | 2,845 | **13,146** | N/A |
+| DGX vLLM Docker | 6,773 | 1,614 | 4,331 | N/A |
+| 3090 llama.cpp | 6,236 | 1,799 | 4,186 | OOM |
 | Mac MLX | 3,011 | 784 | 3,774 | 1,281 |
 | 3090 Ollama | 3,101 | 998 | 2,239 | 141 |
 | DGX llama.cpp | 2,236 | 625 | 1,694 | 623 |
@@ -128,6 +129,8 @@
 | DGX Spark | 36.8 | **59.6** | +62% |
 | Ryzen AI | 32.6 | **58.0** | +78% |
 
+The lower the memory bandwidth, the bigger the MoE advantage — loading 3B weights per token instead of 9B makes a massive difference on bandwidth-limited platforms.
+
 ---
 
 ## Hardware
@@ -142,33 +145,46 @@
 
 | Model | Type | Total | Active | Context |
 |-------|------|------:|-------:|--------:|
-| Qwen3.5-9B | Dense | 9B | 9B | 256K |
-| Qwen3.5-27B | Dense | 27B | 27B | 256K |
-| Qwen3.5-35B-A3B | MoE | 35B | ~3B | 256K |
-| Qwen3.5-122B-A10B | MoE | 122B | ~10B | 256K |
+| [Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B) | Dense | 9B | 9B | 256K |
+| [Qwen3.5-27B](https://huggingface.co/Qwen/Qwen3.5-27B) | Dense | 27B | 27B | 256K |
+| [Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B) | MoE | 35B | ~3B | 256K |
+| [Qwen3.5-122B-A10B](https://huggingface.co/Qwen/Qwen3.5-122B-A10B) | MoE | 122B | ~10B | 256K |
+
+Quantization: [unsloth](https://huggingface.co/unsloth) Dynamic 2.0 GGUF (Q4_K_M, Q8_0)
+
+## Engines
+
+| Engine | Platforms | Notes |
+|--------|-----------|-------|
+| [llama.cpp](https://github.com/ggml-org/llama.cpp) | All 4 | Universal baseline for Track B |
+| [MLX](https://github.com/ml-explore/mlx) | Mac only | Apple Silicon optimized |
+| [Ollama](https://ollama.com/) | All 4 | Easy-to-use wrapper |
+| [vLLM](https://github.com/vllm-project/vllm) | 3090, DGX | GPTQ/BF16, Docker on DGX |
+| [Lemonade](https://lemonade-server.ai/) | Ryzen AI | AMD inference server |
 
 ---
 
 ## Key Findings
 
-1. **3090×2 absolute speed king** — 936 GB/s GDDR6X bandwidth. 35B MoE at 139 tok/s.
-2. **M5 Max best for daily use** — stable TTFT (120ms), MLX 35B MoE at 138 tok/s.
-3. **vLLM GPTQ-Marlin top record** — 35B MoE at **156.3 tok/s** on 3090.
-4. **DGX Spark bandwidth-limited** — 273 GB/s = half of Mac's 546.
-5. **Ryzen AI runs 122B** — $2K mini PC at 22.9 tok/s.
-6. **MoE universally efficient** — 35B-A3B (3B active) > 9B Dense, +18~78% across all platforms.
+1. **Memory bandwidth determines generation speed.** RTX 3090×2 at 936 GB/s dominates everything that fits in 48GB VRAM.
+2. **Unified memory runs everything.** Mac, DGX Spark, and Ryzen AI all run 122B. The 3090 can't even load it.
+3. **MoE flips the rankings.** 35B-A3B (3B active) is 18-78% faster than 9B Dense — active parameter count matters more than total params.
+4. **DGX Spark ≈ Ryzen AI MAX 395.** Despite different architectures (Blackwell vs RDNA 3.5), within 10-15% on most models. Both bandwidth-limited at ~256-273 GB/s.
+5. **vLLM GPTQ-Marlin sets the record.** 35B MoE at **156.3 tok/s** on 3090 — fastest single result.
+6. **llama.cpp is the universal winner.** Best generation speed on 3 of 4 platforms (MLX wins on Mac).
 
 ---
 
 ## Experiment Design (v3)
 
-- **Track B**: Same llama.cpp + same GGUF → hardware comparison
-- **Track A**: All available backends per platform → engine comparison (within platform only)
+- **Track B**: Same llama.cpp + same GGUF across all hardware → pure hardware comparison
+- **Track A**: All available backends per platform → engine comparison (within-platform only)
 - `--no-cache-prompt` + `--slot-prompt-similarity 0` + `--no-enable-prefix-caching`
-- Per-run random nonce prefix prompt (cold prefill)
-- Server restart between prefill tracks
-- Randomized backend / model / track order
+- Per-run random nonce prefix (no prompt cache hits possible)
+- Server restart between prefill tracks (cold KV cache)
+- Randomized backend / model / track execution order
 - Warmup 1 (separate prompt) + Measure 5, median
+- Thermal guard: 85°C → 60s cooldown
 - OOM/failures recorded as skip rows in CSV
 
 ---
@@ -178,20 +194,30 @@
 ```bash
 uv sync
 
-# Track B (hardware comparison)
+# Track B — hardware comparison (llama.cpp only)
 uv run python -m src.runner --config config.yaml --backends llamacpp
 
-# Track A (engine comparison)
+# Track A — engine comparison (all backends)
 uv run python -m src.runner --config config.yaml --backends llamacpp ollama mlx
 
 # Specific models/tracks
 uv run python -m src.runner --models qwen3.5-35b-a3b --tracks gen-512 prefill-16k
 ```
 
+## Request a Benchmark
+
+Want a specific model/quantization tested on this hardware? [Open an issue](https://github.com/baem1n/llm-bench/issues/new?template=experiment_request.md).
+
+This tool measures **single-stream inference throughput** under controlled conditions — not model quality, accuracy, or multi-user serving performance.
+
 ---
 
 ## Blog
 
-- [Part 1: 실험 방법론](https://baem1n.github.io/posts/llm-bench-01-methodology)
-- [Part 2: 상세 분석](https://baem1n.github.io/posts/llm-bench-02-results-analysis)
-- [Part 3: 결과표](https://baem1n.github.io/posts/llm-bench-03-results-tables)
+- [Part 1: Experiment Design](https://baem1n.dev/posts/llm-bench-01-methodology/)
+- [Part 2: Detailed Analysis](https://baem1n.dev/posts/llm-bench-02-results-analysis/)
+- [Part 3: Results Tables](https://baem1n.dev/posts/llm-bench-03-results-tables/)
+
+## License
+
+MIT
