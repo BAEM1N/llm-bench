@@ -2,13 +2,13 @@
 
 > Flair: Discussion
 > 게시 타이밍: 화-목 오전 9-11 AM ET (한국시간 밤 10시-새벽 12시)
-> 차별점: 기존 리뷰(Tom's Hardware, NotebookCheck)는 1:1 비교 + quick run. 우리는 4개 플랫폼 × 5개 엔진 × 5,100회 통제 측정.
+> 차별점: 기존 리뷰(Tom's Hardware, NotebookCheck)는 1:1 비교 + quick run. 우리는 4개 플랫폼 × 5개 엔진 통제 측정.
 
 ---
 
 ## Title
 
-> I bought 3 unified-memory machines (M5 Max / DGX Spark / Ryzen AI MAX 395) to compare local inference. Added my 3090×2 as a discrete VRAM baseline. 5,100 runs later, here's what I found.
+> I bought 3 unified-memory machines (M5 Max / DGX Spark / Ryzen AI MAX 395) to compare local inference. Added my 3090×2 as a discrete VRAM baseline. Here's what I found.
 
 ---
 
@@ -18,7 +18,7 @@ I recently picked up three unified-memory machines for different parts of my wor
 
 Most reviews I've seen compare these machines in pairs (DGX Spark vs Strix Halo, Mac vs everything else), and they're usually single-model quick runs without controlling for caching or prompt variation. I wanted proper apples-to-apples numbers across all four platforms with multiple engines.
 
-So I ran Qwen3.5 (9B, 27B, 35B-A3B, 122B-A10B) across 5 backends (llama.cpp, MLX, Ollama, vLLM, Lemonade). ~5,100 total runs, ~4,200 valid after filtering (CV<0.3 per 5-run set). Cold prefill on every run — `--no-cache-prompt`, random nonce prefix, server restart between prefill tracks. No warm cache tricks.
+So I ran Qwen3.5 (9B, 27B, 35B-A3B, 122B-A10B) across 5 backends (llama.cpp, MLX, Ollama, vLLM, Lemonade). Cold prefill on every run — `--no-cache-prompt`, random nonce prefix, server restart between prefill tracks. No warm cache tricks.
 
 ### The machines
 
@@ -70,7 +70,7 @@ M5 Max leads at **42.9 tok/s** — 546 GB/s bandwidth wins for the biggest model
 
 ### DGX Spark vs Ryzen AI: surprisingly close
 
-Despite completely different architectures (Blackwell GB10 vs Strix Halo RDNA 3.5), gen TPS is within 10-15% on most models. Both have ~128GB unified memory, both are bandwidth-limited at ~256-273 GB/s. Tom's Hardware and NotebookCheck benchmarks showed similar results — but with single runs, not 5,100 controlled measurements.
+Despite completely different architectures (Blackwell GB10 vs Strix Halo RDNA 3.5), gen TPS is within 10-15% on most models. Both have ~128GB unified memory, both are bandwidth-limited at ~256-273 GB/s. Tom's Hardware and NotebookCheck benchmarks showed similar results — but with single runs, not controlled multi-run measurements.
 
 ### What I'd buy
 
@@ -84,7 +84,7 @@ Despite completely different architectures (Blackwell GB10 vs Strix Halo RDNA 3.
 
 Full results (prefill, Q8_0, engine comparisons): https://baem1n.dev/posts/llm-bench-03-results-tables/
 
-Benchmark tool + all raw CSV data (5,100 runs): https://github.com/baem1n/llm-bench
+Benchmark tool + all raw CSV data: https://github.com/baem1n/llm-bench
 
 I did this because I genuinely needed to know which machine to use for what, and I figured the data might help others making similar decisions. Hope it's useful.
 
@@ -101,9 +101,11 @@ Anyone else running Qwen3.5 locally? Curious about 4090/5080 single-GPU numbers 
 ## 게시 전 체크리스트
 
 ### 필수
-- [ ] Mac Ollama 잔여 실험 완료 후 데이터 업데이트 (9B Q4, 27B Q8, 122B Q8 남음)
-- [ ] 블로그 포스트에 Mac Ollama 결과 반영 (현재 `—` 표시된 셀들)
-- [ ] README 데이터도 동기화
+- [x] Mac Ollama gen 트랙 데이터 README 반영 (9B/27B/35B/122B 전부 완료)
+- [x] Mac Ollama 122B prefill-128k 재측정 완료 (190 tok/s, num_ctx 축소 적용)
+- [x] Mac Ollama 27B Q8_0 prefill 4트랙 보충 완료 (2026-04-13, prefill-128k/64k/4k/1k)
+- [x] 블로그 포스트에 Mac Ollama 결과 반영
+- [x] README 데이터 최종 동기화
 - [ ] 영문 블로그 포스트 작성 or 영문 요약 추가 (/en/ 경로)
 
 ### 권장

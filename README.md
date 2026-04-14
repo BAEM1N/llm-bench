@@ -2,7 +2,7 @@
 
 Controlled benchmark of Qwen3.5 models (9B / 27B / 35B-A3B MoE / 122B-A10B MoE) across **4 hardware platforms × 5 inference engines**.
 
-> **Methodology**: Cold prefill (`--no-cache-prompt`), per-run random nonce, server restart between prefill tracks, randomized execution order. 5 runs per combo, median. CV<0.3 outlier filter. **~5,100 total measurements**.
+> **Methodology**: Cold prefill (`--no-cache-prompt`), per-run random nonce, server restart between prefill tracks, randomized execution order. 5 runs per combo, median. CV<0.3 outlier filter.
 
 ---
 
@@ -65,14 +65,14 @@ Controlled benchmark of Qwen3.5 models (9B / 27B / 35B-A3B MoE / 122B-A10B MoE) 
 
 > Same hardware, different engines. Cross-platform comparison uses Track B above.
 
-### M5 Max — MLX vs llama.cpp
+### M5 Max — MLX vs llama.cpp vs Ollama
 
 | Model | MLX | llama.cpp | Ollama |
 |-------|----:|----------:|-------:|
-| 9B | **102.4** | 75.4 | 29.2 |
-| 27B | **28.8** | — | — |
-| 35B-A3B | **138.3** | 91.0 | — |
-| 122B | **66.8** | 38.5 | — |
+| 9B | **102.4** | 75.4 | 52.2 |
+| 27B | **28.8** | — | 15.7 |
+| 35B-A3B | **138.3** | 91.0 | 57.0 |
+| 122B | **66.8** | 38.5 | 28.6 |
 
 ### RTX 3090×2 — vLLM vs llama.cpp vs Ollama
 

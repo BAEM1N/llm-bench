@@ -9,10 +9,11 @@ wheels/
 # Virtual environments
 .venv
 
-# Results (large CSV files) — local runs ignored, remote raw data tracked
+# Results (large CSV files) — local runs ignored, remote + consolidated tracked
 results/*.csv
 results/*.log
 !results/remote/
+!results/consolidated/
 
 # Charts
 charts/
