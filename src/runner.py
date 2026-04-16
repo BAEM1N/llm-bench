@@ -176,7 +176,10 @@ def run_track(
     # 모델 네이티브 컨텍스트 (줄이지 않음)
     model_ctx = model_cfg.get("context_window", gen_cfg["context_window"])
     if backend_name == "ollama":
-        backend._context_window = model_ctx
+        # Ollama: num_ctx를 실제 필요 크기로 설정 (모델 전체 ctx → KV cache 메모리 초과 방지)
+        # 필요 크기 = input + output + 여유분(256 tokens)
+        needed_ctx = input_tokens + max_tokens + 256
+        backend._context_window = min(model_ctx, needed_ctx)
 
     console.print(f"\n  [dim]{track_id}[/dim]  in≈{input_tokens} out={max_tokens}", end=" ")
 
@@ -316,7 +319,7 @@ def run_track(
     return run_results
 
 
-def run_benchmark(config: dict, backends: list[str], models: list[str], output_path: Path) -> None:
+def run_benchmark(config: dict, backends: list[str], models: list[str], output_path: Path, quants: list[str] | None = None) -> None:
     gen_cfg = config["generation"]
     bench_cfg = config["benchmark"]
     thermal_cfg = config.get("thermal", {"enabled": False})
@@ -371,6 +374,8 @@ def run_benchmark(config: dict, backends: list[str], models: list[str], output_p
             model_id = model_cfg.get("id", "")
 
             for quant_cfg in model_cfg["quantizations"]:
+                if quants and quant_cfg["name"] not in quants:
+                    continue
                 # 백엔드별 모델 식별자
                 if backend_name == "mlx":
                     model_ref = quant_cfg["mlx_model"]
@@ -592,6 +597,8 @@ def main():
     parser.add_argument("--models", nargs="+", default=[])
     parser.add_argument("--tracks", nargs="+", default=[],
                         help="특정 track만 실행 (e.g. gen-512 prefill-4k)")
+    parser.add_argument("--quant", nargs="+", default=[],
+                        help="특정 양자화만 실행 (e.g. Q4_K_M Q8_0)")
     args = parser.parse_args()
 
     config = load_config(Path(args.config))
@@ -616,7 +623,7 @@ def main():
         name for name, cfg in config.get("backends", {}).items()
         if cfg.get("enabled", True)
     ]
-    run_benchmark(config, backends, args.models, output_path)
+    run_benchmark(config, backends, args.models, output_path, args.quant)
 
 
 if __name__ == "__main__":

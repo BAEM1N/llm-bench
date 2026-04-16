@@ -1,7 +1,7 @@
 # MacBook Pro 14 — M5 Max (128GB Unified Memory)
 
 **실험 기간**: 2026-03-31 17:44 ~ 2026-04-02 04:11  
-**상태**: ✅ 완료 (187/189 — Ollama 27B prefill-128k 2건 OOM 제외)
+**상태**: ⚠️ 진행중 (188/189 — Ollama 27B Q8_0 prefill 5트랙 미완)
 
 → 전체 상세 보고서: [REPORT.md](../REPORT.md)
 
@@ -160,9 +160,11 @@ TTFT (128k): 9B=46s, 27B=162s, 35B=45s, 122B=~115s
 | 9B | 1,642 | 1,379 | 6,801 | 26,870 | **65,011** |
 | 27B | 603 | 377 | 1,979 | 8,864 | OOM |
 | 35B-A3B | 1,258 | 1,745 | 7,952 | 28,166 | **61,548** |
-| 122B-A10B | 528 | 642 | 2,981 | 11,478 | **27,748** |
+| 122B-A10B | 528 | 642 | 2,981 | 11,478 | **190**† |
 
-> 27B prefill-128k: num_ctx=262144 전체 KV 캐시 pre-allocate → 128GB 초과 OOM
+> † 122B prefill-128k: v3 재측정 (cold prefill, nonce, num_ctx=131K 축소). 1차 실험 값(27,748)은 warm prefill — prompt cache 영향으로 부풀려짐  
+> 27B prefill-128k: num_ctx=262144 전체 KV 캐시 pre-allocate → 128GB 초과 OOM  
+> **미완**: 27B Q8_0 prefill 5트랙 (1k/4k/16k/64k/128k) 추후 측정 예정
 
 ---
 
@@ -213,4 +215,6 @@ TTFT (128k): 9B=46s, 27B=162s, 35B=45s, 122B=~115s
 |------|------|
 | Ollama TTFT (gen 트랙) | max_tokens에 비례 증가 → gen 트랙 Prefill TPS 신뢰 불가 |
 | Ollama 27B prefill-128k | KV 캐시 pre-allocate로 OOM — Q4/Q8 모두 |
+| Ollama 122B prefill-128k | num_ctx=262144 → stall. num_ctx=131K으로 축소하여 측정 완료 (190 tok/s, TTFT=426s) |
+| Ollama 27B Q8_0 prefill | 5트랙 전부 미측정 — 추후 실행 예정 |
 | MLX 128k TTFT | 9B 46초, 27B 162초 — 실용 한계 수준 |
